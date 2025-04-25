@@ -56,6 +56,19 @@ logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "LlamaConfig"
 
+class MLP(nn.Module):
+    def __init__(self, hiddensize):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(hiddensize, 4 * hiddensize) 
+        self.fc2 = nn.Linear(4 * hiddensize, hiddensize)  
+        self.activation = nn.ReLU()  
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.activation(x)  
+        x = self.fc2(x)
+        return x
+
 
 def _prepare_4d_causal_attention_mask_with_cache_position(
     attention_mask: torch.Tensor,
@@ -898,7 +911,8 @@ class LlamaModel(LlamaPreTrainedModel):
             [LlamaDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
         
-        self.replace_layer = LlamaMLP(config)   #The Lightweight Layer
+        #self.replace_layer = LlamaMLP(config)   #The Lightweight Layer
+        self.replace_layer = MLP(config.hidden_size) 
         
         #self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = LlamaRotaryEmbedding(config=config)
