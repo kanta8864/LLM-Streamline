@@ -24,7 +24,7 @@ We have released two compressed models on Hugging Face:
 - [OPT](https://huggingface.co/models?search=opt)
 
 ## ⚙️ Installation
-The CUDA version we are using is 12.1
+The CUDA version we are using is 12.1.
 ```
 pip install -r requirements.txt
 ```
