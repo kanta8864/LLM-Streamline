@@ -12,11 +12,19 @@ mkdir -p $HF_HOME # Ensure the directory exists
 huggingface-cli download meta-llama/Llama-3.1-8B --local-dir-use-symlinks False
 ```
 
+I  tried created virtual env and then tried downloading the requirements from the login node. You may need to make sure python3 and pip are available and if not load them. I then tried to activate this virtual env in the script but somehow it doesnt work lol
+```
+python3 -m venv ~/myenv
+source ~/myenv/bin/activate
+pip install -r requirements.txt
+```
+
 You can submit the job using the command:
 
 ```
 sbatch scripts/run_mseloss_training.sh
 ```
+
 
 #### 📦 Open Source Models
 
