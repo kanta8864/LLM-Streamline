@@ -12,7 +12,7 @@ mkdir -p $HF_HOME # Ensure the directory exists
 huggingface-cli download meta-llama/Llama-3.1-8B --local-dir-use-symlinks False
 ```
 
-I  tried created virtual env and then tried downloading the requirements from the login node. You may need to make sure python3 and pip are available and if not load them. I then tried to activate this virtual env in the script but somehow it doesnt work lol
+I  tried creating virtual env and then tried downloading the requirements from the login node. You may need to make sure python3 and pip are available and if not load them. I then tried to activate this virtual env in the script so that the compute nodes have access to the requirements but some issues with activing virtualenv
 ```
 python3 -m venv ~/myenv
 source ~/myenv/bin/activate
