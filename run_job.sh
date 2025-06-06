@@ -13,7 +13,7 @@
 
 # --- GPU Request ---
 # This line actively requests one NVIDIA A100 80GB GPU.
-#SBATCH --gres=gpu:nvidia_a100_80gb_pcie:1
+#SBATCH --gres=gpu:l40:1
 
 # --- Job Execution ---
 echo "Job started on $(hostname)"
