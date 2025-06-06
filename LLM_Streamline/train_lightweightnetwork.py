@@ -5,6 +5,7 @@ from datasets import load_dataset, concatenate_datasets, load_from_disk
 from tqdm import tqdm
 from itertools import chain
 import gc
+import os
 
 from transformers.models.opt.modeling_opt import OPTDecoderLayer
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
@@ -32,7 +33,77 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return len(self.input_data)
+    
+# This Dataset does not hold data in memory.
+# Instead, it loads each sample from disk one at a time when requested.
+class DiskBasedDataset(Dataset):
+    def __init__(self, data_dir):
+        """
+        Initializes the dataset by pointing to a directory of saved tensor files.
+        Args:
+            data_dir (str): The directory where data files (.pt) are stored.
+        """
+        self.data_dir = data_dir
+        # Get a sorted list of all .pt files in the directory
+        self.file_paths = sorted(
+            [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.pt')],
+            key=lambda f: int(os.path.splitext(os.path.basename(f))[0]) # Sort numerically
+        )
+        self.num_samples = len(self.file_paths)
+        if self.num_samples == 0:
+            raise RuntimeError(f"No data files found in directory: {data_dir}")
 
+    def __len__(self):
+        """Returns the total number of samples (files) in the dataset."""
+        return self.num_samples
+
+    def __getitem__(self, idx):
+        """
+        Loads and returns a single data sample from disk.
+        Args:
+            idx (int): The index of the sample to retrieve.
+        Returns:
+            A tuple (input_tensor, output_tensor).
+        """
+        # Load the specific file corresponding to the index
+        file_path = self.file_paths[idx]
+        input_tensor, output_tensor = torch.load(file_path)
+        return input_tensor, output_tensor
+
+# --- NEW: Function to Pre-compute and Save Data ---
+def precompute_and_save_data(
+    save_dir,
+    original_dataset,
+    model,
+    device,
+    layer_intervals,
+    best_layer,
+    tokenizer,
+    inference_batch_size,
+):
+    """
+    Runs the large model over the dataset, saving the resulting hidden states
+    to disk chunk by chunk to avoid using too much RAM.
+    """
+    print(f"Pre-computing and saving data to '{save_dir}'...")
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Use the existing get_data function, but we will process its output differently.
+    # NOTE: get_data must be a generator (`yield`) or process data in chunks
+    # if the raw dataset itself is too large to fit in memory.
+    # For this example, we assume get_data can return lists, but we will save them immediately.
+    
+    input_list, output_list = get_data(
+        model, original_dataset, device, layer_intervals, best_layer, tokenizer, inference_batch_size
+    )
+    
+    # Save each input/output pair as a separate file
+    for i, (input_tensor, output_tensor) in enumerate(tqdm(zip(input_list, output_list), total=len(input_list), desc="Saving samples to disk")):
+        # Move tensors to CPU before saving to avoid GPU memory issues
+        save_path = os.path.join(save_dir, f"{i}.pt")
+        torch.save((input_tensor.cpu(), output_tensor.cpu()), save_path)
+        
+    print(f"Finished saving {len(input_list)} samples.")
 
 def process_datasets(dataset, train_num_data, tokenizer):
     """
@@ -128,15 +199,13 @@ def valid_model(model, test_dataloader, device):
     total_loss = []
 
     with torch.no_grad():
-        for input_data, output_data in tqdm(test_dataloader):
+        for input_data, output_data in tqdm(test_dataloader, desc="Validating"):
             input_data = input_data.to(device)
             output_data = output_data.to(device)
-            position_ids = (
-                torch.arange(0, 2048).repeat(input_data.shape[0], 1).to(device)
-            )
+            
+            # The simple MLP models only take one argument
             pred = model(input_data)
-            if isinstance(pred, tuple):
-                pred = pred[0]
+            
             loss = loss_fn(pred, output_data)
             total_loss.append(loss.item())
 
@@ -154,7 +223,6 @@ def init_layer(model_name, config, device):
         
     elif "opt" in model_name.lower():
         print("Initializing standard MLP (fc1/fc2) for an OPT-style model.")
-        # The new MLP class takes hidden_size as input
         return MLP(config.hidden_size).to(device)
         
     else:
@@ -178,40 +246,59 @@ def lightweight_model_train(
     model_name,
     gradient_accumulation_step,
 ):
+    # --- STAGE 1: Dataset Processing ---
     dataset_name = "DKYoon/SlimPajama-6B"
     split_name = "train" 
-
     dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)
 
+    # --- STAGE 2: Find Best Layer ---
     best_layer = get_cosine_similarity(
         model, dataset, cosine_num_data, device, layer_intervals, num_layer
     )
-
+    
     replace_model = init_layer(model_name, config, device)
 
-    def prepare_dataset_for_training(dataset, model, device, inference_batch_size):
-        input_list, output_list = get_data(
-            model, dataset, device, layer_intervals, best_layer, tokenizer, inference_batch_size
+    # --- STAGE 3: Pre-compute hidden states (if they don't exist) ---
+    train_data_dir = "./precomputed_data/train"
+    test_data_dir = "./precomputed_data/test"
+
+    # Use a large batch size for efficient GPU utilization during pre-computation
+    inference_batch_size = 32 
+
+    if not os.path.exists(train_data_dir) or not os.listdir(train_data_dir):
+        precompute_and_save_data(
+            train_data_dir, dataset, model, device, layer_intervals, 
+            best_layer, tokenizer, inference_batch_size
         )
-        return CustomDataset(input_list, output_list)
+    else:
+        print(f"Found existing pre-computed training data in '{train_data_dir}'. Skipping pre-computation.")
 
-    inference_batch_size = 4
+    if not os.path.exists(test_data_dir) or not os.listdir(test_data_dir):
+        precompute_and_save_data(
+            test_data_dir, test_dataset, model, device, layer_intervals, 
+            best_layer, tokenizer, inference_batch_size
+        )
+    else:
+        print(f"Found existing pre-computed test data in '{test_data_dir}'. Skipping pre-computation.")
 
-    test_dataset = prepare_dataset_for_training(test_dataset, model, device, inference_batch_size)
-    train_dataset = prepare_dataset_for_training(dataset, model, device, inference_batch_size)
 
-    print("its starting")
+    # --- STAGE 4: Load Disk-Based Datasets and Train ---
+    print("Loading datasets from disk...")
+    train_disk_dataset = DiskBasedDataset(train_data_dir)
+    test_disk_dataset = DiskBasedDataset(test_data_dir)
+    
+    print(f"Successfully loaded {len(train_disk_dataset)} training samples and {len(test_disk_dataset)} test samples.")
 
     test_dataloader = DataLoader(
-    test_dataset, 
+        test_disk_dataset, 
         batch_size=batch_size, 
         shuffle=False, 
         num_workers=8, 
         pin_memory=True
     )
     train_dataloader = DataLoader(
-        train_dataset, 
+        train_disk_dataset, 
         batch_size=batch_size, 
         shuffle=True, 
         num_workers=8, 
@@ -241,13 +328,10 @@ def lightweight_model_train(
         for input_data, output_data in tqdm(train_dataloader, desc=f"Epoch {epoch}"):
             input_data = input_data.to(device)
             output_data = output_data.to(device)
-            position_ids = (
-                torch.arange(0, 2048).repeat(input_data.shape[0], 1).to(device)
-            )
-
+            
+            # Simple MLP models only need the input tensor
             output = replace_model(input_data)
-            output = output[0] if isinstance(output, tuple) else output
-
+            
             loss = criterion(output, output_data)
             loss /= gradient_accumulation_step
             loss.backward()
