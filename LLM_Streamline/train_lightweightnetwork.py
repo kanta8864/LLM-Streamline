@@ -64,9 +64,22 @@ def process_datasets(dataset, train_num_data, tokenizer):
             test_size=(3000 * proportion) / len(filtered_datasets[name])
         )
         test_datasets.append(split["test"])
-        train_split = split["train"].train_test_split(
-            test_size=1 - (train_num_data * proportion) / len(split["train"])
-        )["train"]
+        # Calculate how many training samples we *want* for this slice
+        desired_train_samples = int(train_num_data * proportion)
+        
+        # Check how many are actually available in the current split
+        available_train_samples = len(split["train"])
+
+        # If we want more samples than are available, just take all of them.
+        # Otherwise, split the data to get the number we want.
+        if desired_train_samples >= available_train_samples:
+            print(f"INFO: For '{name}', taking all {available_train_samples} available samples for training.")
+            train_split = split["train"]
+        else:
+            # Calculate the test set size needed to leave the desired number of train samples
+            test_size_ratio = 1.0 - (desired_train_samples / available_train_samples)
+            train_split = split["train"].train_test_split(test_size=test_size_ratio)["train"]
+
         train_datasets.append(train_split)
 
     dataset, test_dataset = concatenate_datasets(train_datasets), concatenate_datasets(
