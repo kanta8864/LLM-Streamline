@@ -33,9 +33,9 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return len(self.input_data)
-    
 
-def process_datasets(dataset,  tokenizer):
+
+def process_datasets(dataset, train_num_data, tokenizer):
     """
     We divided the proportions of RedPajamaCommonCrawl, RedPajamaArXiv,
     and RedPajamaBook by a normalization value because the data length
@@ -129,18 +129,19 @@ def valid_model(model, test_dataloader, device):
     total_loss = []
 
     with torch.no_grad():
-        for input_data, output_data in tqdm(test_dataloader, desc="Validating"):
+        for input_data, output_data in tqdm(test_dataloader):
             input_data = input_data.to(device)
             output_data = output_data.to(device)
-            
-            # The simple MLP models only take one argument
-            pred = model(input_data)
-            
+            position_ids = (
+                torch.arange(0, 2048).repeat(input_data.shape[0], 1).to(device)
+            )
+            pred = model(hidden_states=input_data, position_ids=position_ids)
+            if isinstance(pred, tuple):
+                pred = pred[0]
             loss = loss_fn(pred, output_data)
             total_loss.append(loss.item())
 
     return sum(total_loss) / len(total_loss)
-
 
 def init_layer(model_name, config, device):
     """
