@@ -34,86 +34,6 @@ class CustomDataset(Dataset):
     def __len__(self):
         return len(self.input_data)
     
-# This Dataset does not hold data in memory.
-# Instead, it loads each sample from disk one at a time when requested.
-class DiskBasedDataset(Dataset):
-    def __init__(self, data_dir):
-        """
-        Initializes the dataset by pointing to a directory of saved tensor files.
-        Args:
-            data_dir (str): The directory where data files (.pt) are stored.
-        """
-        self.data_dir = data_dir
-        # Get a sorted list of all .pt files in the directory
-        self.file_paths = sorted(
-            [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.pt')],
-            key=lambda f: int(os.path.splitext(os.path.basename(f))[0]) # Sort numerically
-        )
-        self.num_samples = len(self.file_paths)
-        if self.num_samples == 0:
-            raise RuntimeError(f"No data files found in directory: {data_dir}")
-
-    def __len__(self):
-        """Returns the total number of samples (files) in the dataset."""
-        return self.num_samples
-
-    def __getitem__(self, idx):
-        """
-        Loads and returns a single data sample from disk.
-        Args:
-            idx (int): The index of the sample to retrieve.
-        Returns:
-            A tuple (input_tensor, output_tensor).
-        """
-        # Load the specific file corresponding to the index
-        file_path = self.file_paths[idx]
-        input_tensor, output_tensor = torch.load(file_path)
-        return input_tensor, output_tensor
-
-# --- NEW: Function to Pre-compute and Save Data ---
-def precompute_and_save_data_chunked(
-    save_dir,
-    original_dataset,
-    model,
-    device,
-    layer_intervals,
-    best_layer,
-    tokenizer,
-    inference_batch_size,
-    chunk_size=100  # Process 1000 samples at a time to keep RAM usage low
-):
-    """
-    Runs the large model over the dataset in chunks, saving the resulting 
-    hidden states to disk after each chunk to avoid high RAM usage.
-    """
-    print(f"Pre-computing and saving data to '{save_dir}'...")
-    os.makedirs(save_dir, exist_ok=True)
-    
-    num_samples = len(original_dataset)
-    global_sample_idx = 0
-
-    for i in tqdm(range(0, num_samples, chunk_size), desc="Processing Chunks"):
-        # Select a small chunk of the dataset
-        end_index = min(i + chunk_size, num_samples)
-        dataset_chunk = original_dataset.select(range(i, end_index))
-
-        # Call get_data ONLY on this small chunk. This creates small lists.
-        input_list, output_list = get_data(
-            model, dataset_chunk, device, layer_intervals, best_layer, tokenizer, inference_batch_size
-        )
-
-        # Immediately save the results from this chunk to disk
-        for input_tensor, output_tensor in zip(input_list, output_list):
-            save_path = os.path.join(save_dir, f"{global_sample_idx}.pt")
-            torch.save((input_tensor.cpu(), output_tensor.cpu()), save_path)
-            global_sample_idx += 1
-        
-        # Clean up memory before the next chunk
-        del input_list, output_list, dataset_chunk
-        gc.collect()
-        torch.cuda.empty_cache()
-        
-    print(f"Finished saving {global_sample_idx} samples.")
 
 def process_datasets(dataset, train_num_data, tokenizer):
     """
@@ -273,47 +193,26 @@ def lightweight_model_train(
     train_data_dir = "./precomputed_data/train"
     test_data_dir = "./precomputed_data/test"
 
-    inference_batch_size = 2
 
-    if not os.path.exists(train_data_dir) or not os.listdir(train_data_dir):
-        # Use the new chunked function
-        precompute_and_save_data_chunked(
-            train_data_dir, dataset, model, device, layer_intervals, 
-            best_layer, tokenizer, inference_batch_size
+    def prepare_dataset_for_training(dataset, model, device):
+        input_list, output_list = get_data(
+            model, dataset, device, layer_intervals, best_layer, tokenizer, batch_size
         )
-    else:
-        print(f"Found existing pre-computed training data in '{train_data_dir}'. Skipping pre-computation.")
+        return CustomDataset(input_list, output_list)
 
-    if not os.path.exists(test_data_dir) or not os.listdir(test_data_dir):
-        # Use the new chunked function
-        precompute_and_save_data_chunked(
-            test_data_dir, test_dataset, model, device, layer_intervals, 
-            best_layer, tokenizer, inference_batch_size
-        )
-    else:
-        print(f"Found existing pre-computed test data in '{test_data_dir}'. Skipping pre-computation.")
-
-    # --- STAGE 4: Load Disk-Based Datasets and Train ---
-    print("Loading datasets from disk...")
-    train_disk_dataset = DiskBasedDataset(train_data_dir)
-    test_disk_dataset = DiskBasedDataset(test_data_dir)
-    
-    print(f"Successfully loaded {len(train_disk_dataset)} training samples and {len(test_disk_dataset)} test samples.")
+    test_dataset = prepare_dataset_for_training(test_dataset, model, device)
+    train_dataset = prepare_dataset_for_training(dataset, model, device)
 
     test_dataloader = DataLoader(
-        test_disk_dataset, 
-        batch_size=batch_size, 
-        shuffle=False, 
-        num_workers=8, 
-        pin_memory=True
+        test_dataset, batch_size=batch_size, shuffle=False, num_workers=0
     )
+    print("test data loader completed")
+
     train_dataloader = DataLoader(
-        train_disk_dataset, 
-        batch_size=batch_size, 
-        shuffle=True, 
-        num_workers=8, 
-        pin_memory=True
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=0
     )
+    print("train data loader completed")
+    
 
     criterion = nn.MSELoss()
     optimizer = torch.optim.AdamW(replace_model.parameters(), lr=lr, weight_decay=wd)
