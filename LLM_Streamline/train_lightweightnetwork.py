@@ -273,7 +273,7 @@ def lightweight_model_train(
     train_data_dir = "./precomputed_data/train"
     test_data_dir = "./precomputed_data/test"
 
-    inference_batch_size = 8
+    inference_batch_size = 2
 
     if not os.path.exists(train_data_dir) or not os.listdir(train_data_dir):
         # Use the new chunked function
