@@ -178,8 +178,9 @@ def lightweight_model_train(
 ):
     # --- STAGE 1: Dataset Processing ---
     dataset_name = "wikitext"
+    config_name = "wikitext-2-raw-v1"
     split_name = "train" 
-    dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
+    dataset = load_dataset(dataset_name, config_name, split=split_name, trust_remote_code=True)
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)
 
     # --- STAGE 2: Find Best Layer ---
