@@ -158,3 +158,9 @@ def run():
     )
 
     pruned_model.save_pretrained("{}-llm-streamline-mseloss".format(args.model_name))
+
+    import os
+
+    base_model_name = os.path.basename(args.model_name)
+    output_dir = f"{base_model_name}-llm-streamline-mseloss"
+    pruned_model.save_pretrained(output_dir)
