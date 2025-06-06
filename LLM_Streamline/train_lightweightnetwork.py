@@ -177,7 +177,7 @@ def lightweight_model_train(
     gradient_accumulation_step,
 ):
     # --- STAGE 1: Dataset Processing ---
-    dataset_name = "DKYoon/SlimPajama-6B"
+    dataset_name = "wikitext"
     split_name = "train" 
     dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)

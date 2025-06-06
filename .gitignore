@@ -89,3 +89,5 @@ logs/
 # Misc
 *.DS_Store
 Thumbs.db
+
+my_deepspeed_env.sif

@@ -14,7 +14,7 @@ class ModelArguments:
         metadata={
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
-        default="facebook/opt-1.3b",
+        default="facebook/opt-125m",
     )
 
     use_fast: bool = field(
