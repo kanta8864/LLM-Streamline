@@ -264,7 +264,7 @@ def lightweight_model_train(
     test_data_dir = "./precomputed_data/test"
 
     # Use a large batch size for efficient GPU utilization during pre-computation
-    inference_batch_size = 8
+    inference_batch_size = 1
 
     if not os.path.exists(train_data_dir) or not os.listdir(train_data_dir):
         precompute_and_save_data(
