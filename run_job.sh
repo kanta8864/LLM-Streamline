@@ -30,9 +30,21 @@ CONTAINER_PATH="$HOME/my_deepspeed_env.sif"
 #                   It will appear at the same path inside.
 # `$CONTAINER_PATH`: The environment to run in.
 # `accelerate launch ...`: Your actual command.
+
+# --- Job Execution ---
+echo "Job started on $(hostname)"
+echo "Running in directory: $(pwd)"
+echo "Allocated GPU: $CUDA_VISIBLE_DEVICES"
+
+# --- NEW: Set Hugging Face cache to the large /scratch partition ---
+export HF_HOME="/scratch/$USER/.cache/huggingface"
+mkdir -p $HF_HOME
+echo "Hugging Face cache is set to: $HF_HOME"
+
 apptainer exec \
     --nv \
     --bind $(pwd) \
+    --bind /scratch \
     "$CONTAINER_PATH" \
     accelerate launch mseloss_entry.py --with_tracking
 
