@@ -132,10 +132,7 @@ def valid_model(model, test_dataloader, device):
         for input_data, output_data in tqdm(test_dataloader):
             input_data = input_data.to(device)
             output_data = output_data.to(device)
-            position_ids = (
-                torch.arange(0, 2048).repeat(input_data.shape[0], 1).to(device)
-            )
-            pred = model(hidden_states=input_data, position_ids=position_ids)
+            pred = model(input_data)
             if isinstance(pred, tuple):
                 pred = pred[0]
             loss = loss_fn(pred, output_data)
@@ -176,11 +173,34 @@ def lightweight_model_train(
     config,
     model_name,
     gradient_accumulation_step,
+    use_subset=True,  # Add this parameter
+    subset_size=10000,  # Add this parameter
 ):
     # --- STAGE 1: Dataset Processing ---
     dataset_name = "DKYoon/SlimPajama-6B"
     split_name = "train" 
-    dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
+    
+    if use_subset:
+        # Option 1: Load streaming dataset and take first N examples
+        print(f"Loading subset of {subset_size} examples...")
+        dataset = load_dataset(dataset_name, split=split_name, streaming=True, trust_remote_code=True)
+        dataset = dataset.take(subset_size)
+        # Convert back to regular dataset
+        dataset = load_dataset(dataset_name, split=f"train[:{subset_size}]", trust_remote_code=True)
+        
+        # Alternative Option 2: Load a percentage of the full dataset
+        # dataset = load_dataset(dataset_name, split="train[:1%]", trust_remote_code=True)
+        
+    else:
+        # Original full dataset loading
+        dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
+    
+    # Adjust train_num_data if it's larger than our subset
+    if use_subset:
+        actual_dataset_size = len(dataset)
+        train_num_data = min(train_num_data, int(actual_dataset_size * 0.8))  # Use 80% for training
+        print(f"Adjusted train_num_data to {train_num_data} based on subset size")
+    
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)
 
     # --- STAGE 2: Find Best Layer ---
