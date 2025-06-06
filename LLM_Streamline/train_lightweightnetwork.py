@@ -183,9 +183,6 @@ def lightweight_model_train(
     if use_subset:
         # Option 1: Load streaming dataset and take first N examples
         print(f"Loading subset of {subset_size} examples...")
-        dataset = load_dataset(dataset_name, split=split_name, streaming=True, trust_remote_code=True)
-        dataset = dataset.take(subset_size)
-        # Convert back to regular dataset
         dataset = load_dataset(dataset_name, split=f"train[:{subset_size}]", trust_remote_code=True)
         
         # Alternative Option 2: Load a percentage of the full dataset
@@ -195,11 +192,19 @@ def lightweight_model_train(
         # Original full dataset loading
         dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
     
-    # Adjust train_num_data if it's larger than our subset
-    if use_subset:
-        actual_dataset_size = len(dataset)
-        train_num_data = min(train_num_data, int(actual_dataset_size * 0.8))  # Use 80% for training
-        print(f"Adjusted train_num_data to {train_num_data} based on subset size")
+    # Get actual dataset size and adjust train_num_data
+    actual_dataset_size = len(dataset)
+    print(f"Actual dataset size: {actual_dataset_size}")
+    
+    # Ensure train_num_data doesn't exceed 80% of actual dataset size
+    max_train_size = int(actual_dataset_size * 0.8)
+    train_num_data = min(train_num_data, max_train_size)
+    
+    print(f"Using train_num_data: {train_num_data} (max possible: {max_train_size})")
+    
+    # Additional safety check
+    if train_num_data >= actual_dataset_size:
+        raise ValueError(f"train_num_data ({train_num_data}) must be less than dataset size ({actual_dataset_size})")
     
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)
 
