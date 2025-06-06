@@ -1,0 +1,38 @@
+# File: Apptainer.def
+
+Bootstrap: docker
+# Use NVIDIA's CUDA 12.1.1 image. This version is a great match for PyTorch 2.2.1.
+From: nvidia/cuda:12.1.1-devel-ubuntu22.04
+
+%post
+    # This section runs once during the container build to set up the environment.
+
+    # Prevent interactive prompts during installation
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Update OS and install basics like Python, pip, and git
+    apt-get update && apt-get install -y \
+        python3.10 \
+        python3-pip \
+        python3.10-venv \
+        git \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Create a Python virtual environment inside the container.
+    # This is a robust way to manage dependencies.
+    python3.10 -m venv /opt/venv
+
+    # Activate the venv and install all packages from requirements.txt
+    # The --no-cache-dir flag keeps the final image smaller.
+    . /opt/venv/bin/activate && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
+
+%files
+    # Copy your requirements.txt from your local machine to a temporary location
+    # inside the container so the %post section can use it for installation.
+    ./requirements.txt /tmp/requirements.txt
+
+%environment
+    # This sets up the environment every time the container is started.
+    # We activate our Python virtual environment.
+    source /opt/venv/bin/activate

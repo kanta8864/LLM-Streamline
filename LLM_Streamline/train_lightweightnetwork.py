@@ -80,7 +80,7 @@ def precompute_and_save_data_chunked(
     best_layer,
     tokenizer,
     inference_batch_size,
-    chunk_size=1000  # Process 1000 samples at a time to keep RAM usage low
+    chunk_size=100  # Process 1000 samples at a time to keep RAM usage low
 ):
     """
     Runs the large model over the dataset in chunks, saving the resulting 
