@@ -71,7 +71,7 @@ class DiskBasedDataset(Dataset):
         return input_tensor, output_tensor
 
 # --- NEW: Function to Pre-compute and Save Data ---
-def precompute_and_save_data(
+def precompute_and_save_data_chunked(
     save_dir,
     original_dataset,
     model,
@@ -80,30 +80,40 @@ def precompute_and_save_data(
     best_layer,
     tokenizer,
     inference_batch_size,
+    chunk_size=1000  # Process 1000 samples at a time to keep RAM usage low
 ):
     """
-    Runs the large model over the dataset, saving the resulting hidden states
-    to disk chunk by chunk to avoid using too much RAM.
+    Runs the large model over the dataset in chunks, saving the resulting 
+    hidden states to disk after each chunk to avoid high RAM usage.
     """
     print(f"Pre-computing and saving data to '{save_dir}'...")
     os.makedirs(save_dir, exist_ok=True)
     
-    # Use the existing get_data function, but we will process its output differently.
-    # NOTE: get_data must be a generator (`yield`) or process data in chunks
-    # if the raw dataset itself is too large to fit in memory.
-    # For this example, we assume get_data can return lists, but we will save them immediately.
-    
-    input_list, output_list = get_data(
-        model, original_dataset, device, layer_intervals, best_layer, tokenizer, inference_batch_size
-    )
-    
-    # Save each input/output pair as a separate file
-    for i, (input_tensor, output_tensor) in enumerate(tqdm(zip(input_list, output_list), total=len(input_list), desc="Saving samples to disk")):
-        # Move tensors to CPU before saving to avoid GPU memory issues
-        save_path = os.path.join(save_dir, f"{i}.pt")
-        torch.save((input_tensor.cpu(), output_tensor.cpu()), save_path)
+    num_samples = len(original_dataset)
+    global_sample_idx = 0
+
+    for i in tqdm(range(0, num_samples, chunk_size), desc="Processing Chunks"):
+        # Select a small chunk of the dataset
+        end_index = min(i + chunk_size, num_samples)
+        dataset_chunk = original_dataset.select(range(i, end_index))
+
+        # Call get_data ONLY on this small chunk. This creates small lists.
+        input_list, output_list = get_data(
+            model, dataset_chunk, device, layer_intervals, best_layer, tokenizer, inference_batch_size
+        )
+
+        # Immediately save the results from this chunk to disk
+        for input_tensor, output_tensor in zip(input_list, output_list):
+            save_path = os.path.join(save_dir, f"{global_sample_idx}.pt")
+            torch.save((input_tensor.cpu(), output_tensor.cpu()), save_path)
+            global_sample_idx += 1
         
-    print(f"Finished saving {len(input_list)} samples.")
+        # Clean up memory before the next chunk
+        del input_list, output_list, dataset_chunk
+        gc.collect()
+        torch.cuda.empty_cache()
+        
+    print(f"Finished saving {global_sample_idx} samples.")
 
 def process_datasets(dataset, train_num_data, tokenizer):
     """
@@ -263,11 +273,11 @@ def lightweight_model_train(
     train_data_dir = "./precomputed_data/train"
     test_data_dir = "./precomputed_data/test"
 
-    # Use a large batch size for efficient GPU utilization during pre-computation
-    inference_batch_size = 1
+    inference_batch_size = 8
 
     if not os.path.exists(train_data_dir) or not os.listdir(train_data_dir):
-        precompute_and_save_data(
+        # Use the new chunked function
+        precompute_and_save_data_chunked(
             train_data_dir, dataset, model, device, layer_intervals, 
             best_layer, tokenizer, inference_batch_size
         )
@@ -275,13 +285,13 @@ def lightweight_model_train(
         print(f"Found existing pre-computed training data in '{train_data_dir}'. Skipping pre-computation.")
 
     if not os.path.exists(test_data_dir) or not os.listdir(test_data_dir):
-        precompute_and_save_data(
+        # Use the new chunked function
+        precompute_and_save_data_chunked(
             test_data_dir, test_dataset, model, device, layer_intervals, 
             best_layer, tokenizer, inference_batch_size
         )
     else:
         print(f"Found existing pre-computed test data in '{test_data_dir}'. Skipping pre-computation.")
-
 
     # --- STAGE 4: Load Disk-Based Datasets and Train ---
     print("Loading datasets from disk...")
