@@ -1,4 +1,3 @@
-from FFN import FFN
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -10,9 +9,14 @@ import gc
 from transformers.models.opt.modeling_opt import OPTDecoderLayer
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
+
+
 from LLM_Streamline.scheduler import get_cosine_schedule_with_warmup
 from LLM_Streamline.get_cosine import get_cosine_similarity
 from LLM_Streamline.get_train_data import get_data
+from LLM_Streamline.modeling_llama import LlamaMLP 
+from LLM_Streamline.modeling_mlp import MLP
+
 
 
 class CustomDataset(Dataset):
@@ -130,7 +134,7 @@ def valid_model(model, test_dataloader, device):
             position_ids = (
                 torch.arange(0, 2048).repeat(input_data.shape[0], 1).to(device)
             )
-            pred = model(hidden_states=input_data, position_ids=position_ids)
+            pred = model(input_data)
             if isinstance(pred, tuple):
                 pred = pred[0]
             loss = loss_fn(pred, output_data)
@@ -139,94 +143,22 @@ def valid_model(model, test_dataloader, device):
     return sum(total_loss) / len(total_loss)
 
 
-def init_layer(replace_model_name, config, device, model, best_layer, layer_intervals):
-
-    # def init_opt_layer(model_dict, layer_dict, layer_idx):
-    #     prefix = "model.decoder.layers.{}".format(layer_idx)
-    #     mappings = {
-    #         "self_attn.q_proj": ["weight", "bias"],
-    #         "self_attn.k_proj": ["weight", "bias"],
-    #         "self_attn.v_proj": ["weight", "bias"],
-    #         "self_attn.out_proj": ["weight", "bias"],
-    #         "self_attn_layer_norm": ["weight", "bias"],
-    #         "fc1": ["weight", "bias"],
-    #         "fc2": ["weight", "bias"],
-    #         "final_layer_norm": ["weight", "bias"],
-    #     }
-
-    #     for module, params in mappings.items():
-    #         for param in params:
-    #             layer_dict[f"{module}.{param}"] = model_dict[
-    #                 f"{prefix}.{module}.{param}"
-    #             ]
-
-    #     return layer_dict
-
-    # def init_llama_layer(model_dict, layer_dict, layer_idx):
-    #     prefix = "model.layers.{}".format(layer_idx)
-    #     mappings = {
-    #         "self_attn.q_proj.weight": f"{prefix}.self_attn.q_proj.weight",
-    #         "self_attn.k_proj.weight": f"{prefix}.self_attn.k_proj.weight",
-    #         "self_attn.v_proj.weight": f"{prefix}.self_attn.v_proj.weight",
-    #         "self_attn.o_proj.weight": f"{prefix}.self_attn.o_proj.weight",
-    #         "mlp.gate_proj.weight": f"{prefix}.mlp.gate_proj.weight",
-    #         "mlp.up_proj.weight": f"{prefix}.mlp.up_proj.weight",
-    #         "mlp.down_proj.weight": f"{prefix}.mlp.down_proj.weight",
-    #         "input_layernorm.weight": f"{prefix}.input_layernorm.weight",
-    #         "post_attention_layernorm.weight": f"{prefix}.post_attention_layernorm.weight",
-    #     }
-
-    #     for target, source in mappings.items():
-    #         layer_dict[target] = model_dict[source]
-
-    #     return layer_dict
-    
-    hidden_size = config.hidden_size
-
-    if hasattr(config, 'intermediate_size'): # For Llama-like configs
-        ffn_intermediate_size = config.intermediate_size
-    elif hasattr(config, 'ffn_dim'): # For OPT-like configs
-        ffn_intermediate_size = config.ffn_dim
-    elif hasattr(config, 'hidden_size'): # Fallback if no specific intermediate dim is found
-        ffn_intermediate_size = config.hidden_size * 4 # Common heuristic
-    else:
-        raise ValueError("Config does not have 'hidden_size', 'intermediate_size', or 'ffn_dim'. Cannot determine FFN dimensions.")
-
-    if replace_model_name == "opt_layer" or replace_model_name == "llama_layer":
-        activation_str = "relu" # Default activation
-
-        # Try to infer a suitable activation function from config or model name
-        model_type_config_attr = getattr(config, 'model_type', "").lower()
+def init_layer(model_name, config, device):
+    """
+    Factory function to initialize the correct lightweight network (MLP)
+    based on the model architecture.
+    """
+    if "llama" in model_name.lower():
+        print("Initializing LlamaMLP (SwiGLU) for a Llama-style model.")
+        return LlamaMLP(config).to(device)
         
-        if "llama" in model_type_config_attr or ("llama" in replace_model_name.lower() and not model_type_config_attr):
-            activation_str = getattr(config, 'hidden_act', 'silu') # Llama typically uses 'silu'
-        elif "opt" in model_type_config_attr or ("opt" in replace_model_name.lower() and not model_type_config_attr):
-            activation_str = getattr(config, 'activation_function', 'relu') # OPT often uses 'relu' or 'gelu'
+    elif "opt" in model_name.lower():
+        print("Initializing standard MLP (fc1/fc2) for an OPT-style model.")
+        # The new MLP class takes hidden_size as input
+        return MLP(config.hidden_size).to(device)
         
-        replace_model = FFN(hidden_size, ffn_intermediate_size, activation_fn_str=activation_str).to(device)
     else:
-        # This part handles unexpected replace_model_name values.
-        # The original script's lightweight_model_train calls init_layer with "opt_layer" or "llama_layer".
-        raise ValueError(f"Unsupported replace_model_name: {replace_model_name}. This function is modified to replace 'opt_layer' or 'llama_layer' with an FFN.")
-
-    return replace_model
-
-    # if replace_model_name == "opt_layer":
-    #     replace_model = OPTDecoderLayer(config).to(device)
-    # elif replace_model_name == "llama_layer":
-    #     replace_model = LlamaDecoderLayer(config, 0).to(device)
-
-    # model_dict = model.state_dict()
-    # layer_dict = replace_model.state_dict()
-
-    # if replace_model_name == "opt_Layer":
-    #     layer_dict = init_opt_layer(model_dict, layer_dict, best_layer)
-    # elif replace_model_name == "llama_layer":
-    #     layer_dict = init_llama_layer(model_dict, layer_dict, best_layer)
-
-    # replace_model.load_state_dict(layer_dict)
-
-    # return replace_model
+        raise NotImplementedError(f"No lightweight network implementation for model type: {model_name}")
 
 
 def lightweight_model_train(
@@ -256,31 +188,34 @@ def lightweight_model_train(
         model, dataset, cosine_num_data, device, layer_intervals, num_layer
     )
 
-    if "opt" in model_name or "OPT" in model_name:
-        replace_model = init_layer(
-            "opt_layer", config, device, model, best_layer, layer_intervals
-        )
-    elif "llama" in model_name or "Llama" in model_name:
-        replace_model = init_layer(
-            "llama_layer", config, device, model, best_layer, layer_intervals
-        )
-    else:
-        raise ValueError(f"Unknown model type")
+    replace_model = init_layer(model_name, config, device)
 
-    def prepare_dataset_for_training(dataset, model, device):
+    def prepare_dataset_for_training(dataset, model, device, inference_batch_size):
         input_list, output_list = get_data(
-            model, dataset, device, layer_intervals, best_layer, tokenizer, batch_size
+            model, dataset, device, layer_intervals, best_layer, tokenizer, inference_batch_size
         )
         return CustomDataset(input_list, output_list)
 
-    test_dataset = prepare_dataset_for_training(test_dataset, model, device)
-    train_dataset = prepare_dataset_for_training(dataset, model, device)
+    inference_batch_size = 4
+
+    test_dataset = prepare_dataset_for_training(test_dataset, model, device, inference_batch_size)
+    train_dataset = prepare_dataset_for_training(dataset, model, device, inference_batch_size)
+
+    print("its starting")
 
     test_dataloader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=0
+    test_dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        num_workers=8, 
+        pin_memory=True
     )
     train_dataloader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=0
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        num_workers=8, 
+        pin_memory=True
     )
 
     criterion = nn.MSELoss()
@@ -310,7 +245,7 @@ def lightweight_model_train(
                 torch.arange(0, 2048).repeat(input_data.shape[0], 1).to(device)
             )
 
-            output = replace_model(hidden_states=input_data, position_ids=position_ids)
+            output = replace_model(input_data)
             output = output[0] if isinstance(output, tuple) else output
 
             loss = criterion(output, output_data)
