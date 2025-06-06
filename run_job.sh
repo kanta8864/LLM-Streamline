@@ -4,7 +4,7 @@
 # --- Slurm Resource Request ---
 #SBATCH --job-name=deepspeed-training
 #SBATCH --partition=general
-#SBATCH --time=05:00:00              # Request 5 hours
+#SBATCH --time=03:00:00              # Request 5 hours
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8            # Request 8 CPU cores
