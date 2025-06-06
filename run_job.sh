@@ -1,51 +1,51 @@
 #!/bin/bash
-# File: run_job.sh
 
-# --- Slurm Resource Request ---
-#SBATCH --job-name=deepspeed-training
-#SBATCH --partition=general
-#SBATCH --time=03:00:00              # Request 5 hours
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8            # Request 8 CPU cores
-#SBATCH --mem=64G                    # Request 64 GB of memory
-#SBATCH --output=slurm_output_%j.log
+# --- Slurm Resource Request (from your script for DelftBlue) ---
+#SBATCH --job-name="apptainer-deepspeed"
+#SBATCH --time=3:00:00
+#SBATCH --ntasks=1
+#SBATCH --gpus-per-task=1
+#SBATCH --cpus-per-task=2
+#SBATCH --partition=gpu-a100
+#SBATCH --mem-per-cpu=8000M
+#SBATCH --account=education-eemcs-msc-cs
 
-# --- GPU Request ---
-# This line actively requests one NVIDIA A100 80GB GPU.
-#SBATCH --gres=gpu:l40:1
+# --- Paths and Environment ---
+PROJECT_DIR="/scratch/ktanahashi/LLM-Streamline"
+CONTAINER_PATH="${PROJECT_DIR}/my_deepspeed_env.sif" # Assuming container is in the project dir on scratch
 
-# --- Job Execution ---
-echo "Job started on $(hostname)"
-echo "Running in directory: $(pwd)"
-echo "Allocated GPU: $CUDA_VISIBLE_DEVICES"
+# Set Hugging Face cache to offline mode, pointing to your pre-downloaded files
+export HF_HOME="/scratch/ktanahashi/huggingface_cache"
+export HF_HUB_OFFLINE=1
 
-# Define path to your container image (assuming it's in your home directory)
-CONTAINER_PATH="$HOME/my_deepspeed_env.sif"
-
-# This command runs your code. Let's break it down:
-# `apptainer exec`: Execute a command in the container.
-# `--nv`:           Enable NVIDIA GPU access.
-# `--bind $(pwd)`:  Mount the current directory (your repo) into the container.
-#                   It will appear at the same path inside.
-# `$CONTAINER_PATH`: The environment to run in.
-# `accelerate launch ...`: Your actual command.
+# --- Load Modules ---
+echo "Loading modules..."
+# Load the general environment module for DelftBlue
+module load 2024r1
+# Load CUDA for the host to correctly interface with the GPU
+module load cuda/12.1
+# Load the Apptainer module itself
+module load apptainer
 
 # --- Job Execution ---
 echo "Job started on $(hostname)"
-echo "Running in directory: $(pwd)"
-echo "Allocated GPU: $CUDA_VISIBLE_DEVICES"
+echo "Project directory: ${PROJECT_DIR}"
+echo "Container path: ${CONTAINER_PATH}"
+echo "Hugging Face cache (HF_HOME): ${HF_HOME}"
+echo "Running in OFFLINE mode: ${HF_HUB_OFFLINE}"
 
-# --- NEW: Set Hugging Face cache to the large /scratch partition ---
-export HF_HOME="/scratch/$USER/.cache/huggingface"
-mkdir -p $HF_HOME
-echo "Hugging Face cache is set to: $HF_HOME"
+# Navigate to project directory
+cd "${PROJECT_DIR}" || { echo "ERROR: Failed to cd to ${PROJECT_DIR}."; exit 1; }
 
+# --- Run Code Inside the Apptainer Container ---
+# This command executes the training script inside the container's environment.
+# Note that we are no longer sourcing a venv.
 apptainer exec \
     --nv \
-    --bind $(pwd) \
+    --bind "${PROJECT_DIR}":"/app" \
     --bind /scratch \
-    "$CONTAINER_PATH" \
+    --pwd /app \
+    "${CONTAINER_PATH}" \
     accelerate launch mseloss_entry.py --with_tracking
 
 echo "Job finished."

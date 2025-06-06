@@ -3,7 +3,7 @@ deepspeed_config:
   gradient_accumulation_steps: 1
   gradient_clipping: 1.0
   offload_optimizer_device: cpu
-  offload_param_device: cpu
+  offload_param_device: cpu # This offloads model parameters to CPU with ZeRO-2, can save more GPU RAM
   zero3_init_flag: false
   zero_stage: 2
 distributed_type: DEEPSPEED
@@ -12,7 +12,7 @@ machine_rank: 0
 main_training_function: main
 mixed_precision: bf16
 num_machines: 1
-num_processes: 4
+num_processes: 2 # Changed from 4 to 2 (to match 2 GPUs)
 rdzv_backend: static
 same_network: true
 tpu_env: []

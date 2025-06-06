@@ -35,7 +35,7 @@ class CustomDataset(Dataset):
         return len(self.input_data)
     
 
-def process_datasets(dataset, train_num_data, tokenizer):
+def process_datasets(dataset,  tokenizer):
     """
     We divided the proportions of RedPajamaCommonCrawl, RedPajamaArXiv,
     and RedPajamaBook by a normalization value because the data length

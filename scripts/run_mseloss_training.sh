@@ -1,68 +1,94 @@
 #!/bin/bash
 
-#SBATCH --job-name="without_specific_python_module" # Changed job name for clarity
-#SBATCH --time=6:00:00
+#SBATCH --job-name="zeri" # Updated job name
+
+#SBATCH --time=2:00:00 # Reduced time as no pip install in job
+
 #SBATCH --ntasks=1
+
+#SBATCH --partition=gpu
+
 #SBATCH --gpus-per-task=1
-#SBATCH --cpus-per-task=2
-#SBATCH --partition=gpu-a100
-#SBATCH --mem-per-cpu=8000M
+
+#SBATCH --cpus-per-task=6
+
+#SBATCH --mem-per-cpu=5000M
+
 #SBATCH --account=education-eemcs-msc-cs
-#SBATCH --output=without_specific_python_module_%j.out # Optional: specific output file
-#SBATCH --error=without_specific_python_module_%j.err  # Optional: specific error file
 
-PROJECT_DIR="/scratch/ktanahashi/LLM-Streamline"
-VENV_PATH="${PROJECT_DIR}/venv"
+PROJECT_DIR="/scratch/ktanahashi/LLM-Streamline" # Your project directory
+VENV_NAME="venv" # Using fixed venv name like friend's example
 
-# Load necessary modules
+# No trap command for cleanup, to match friend's script more closely.
+# If this venv needs to be fresh each time, manual removal or a job-specific name would be needed.
+
+# Change to project directory first
+cd "${PROJECT_DIR}" || { echo "ERROR: Failed to cd to ${PROJECT_DIR}. Exiting."; exit 1; }
+echo "Changed directory to $(pwd)"
+
+# Load necessary modules (following friend's example)
 echo "Loading modules..."
-module load 2024r1 || { echo "ERROR: Failed to load module 2024r1. Exiting."; exit 1; }
-echo "Module 2024r1 loaded."
+module load 2023r1 || { echo "ERROR: Failed to load module 2023r1. Exiting."; exit 1; }
+echo "Module 2023r1 loaded."
 
 module load cuda/12.1 || { echo "ERROR: Failed to load module cuda/12.1. Exiting."; exit 1; }
 echo "Module cuda/12.1 loaded."
 
-# Section for loading python/3.10.12 is now commented out for this test
-# echo "Attempting to load python/3.10.12..."
-# module load python/3.10.12
-# if [ $? -ne 0 ]; then
-#     echo "ERROR: Failed to load module python/3.10.12."
-#     echo "Listing available python modules for debugging (if any):"
-#     module avail python # This will list modules containing "python"
-#     echo "Please check the output above and with your HPC support."
-#     exit 1
-# fi
-# echo "Module python/3.10.12 loaded."
-echo "INFO: Skipping explicit load of system python/3.10.12 module for this test."
+module load python/3.8.12 || { echo "ERROR: Failed to load module python/3.8.12. Exiting."; exit 1; }
+echo "Module python/3.8.12 loaded."
 
-# Set Hugging Face cache
-export HF_HOME="/scratch/ktanahashi/huggingface_cache"
-export HF_HUB_OFFLINE=1
-
-# Activate your virtual environment
-echo "Activating virtual environment from: ${VENV_PATH}/bin/activate"
-if [ ! -f "${VENV_PATH}/bin/activate" ]; then
-    echo "ERROR: Virtual environment activation script not found at ${VENV_PATH}/bin/activate"
-    exit 1
-fi
-source "${VENV_PATH}/bin/activate"
-
-echo "Verifying Python version from virtual environment..."
+echo "System Python details after all module loads:"
 which python3
 python3 --version
-echo "PYTHONPATH: $PYTHONPATH"
-echo "PATH: $PATH"
 
-cd "${PROJECT_DIR}" || { echo "ERROR: Failed to cd to ${PROJECT_DIR}. Exiting."; exit 1; } # Added check for cd
+# Create a new virtual environment in the current directory (PROJECT_DIR)
+echo ""
+echo "Creating new virtual environment at: ./${VENV_NAME}"
+python3 -m venv "./${VENV_NAME}" || { echo "ERROR: Failed to create venv. Exiting."; exit 1; }
 
+# Upgrade pip within the venv (using relative path after cd)
+echo ""
+echo "Upgrading pip in venv..."
+"./${VENV_NAME}/bin/python" -m pip install --upgrade pip || { echo "ERROR: Failed to upgrade pip. Exiting."; exit 1; }
+
+# Install dependencies from requirements.txt into the venv (using relative path)
+# This assumes requirements.txt is in PROJECT_DIR (current directory)
+echo ""
+echo "Installing dependencies from requirements.txt into venv..."
+if [ ! -f "requirements.txt" ]; then # Check in current directory
+    echo "ERROR: requirements.txt not found in $(pwd)"
+    exit 1
+fi
+"./${VENV_NAME}/bin/pip" install -r "requirements.txt" || { echo "ERROR: Failed to install requirements.txt. Exiting."; exit 1; }
+
+# Install ultralytics into the venv (using relative path)
+echo ""
+echo "Installing ultralytics into venv..."
+"./${VENV_NAME}/bin/pip" install ultralytics || { echo "ERROR: Failed to install ultralytics. Exiting."; exit 1; }
+
+echo ""
+echo "Verifying Python version from virtual environment..."
+"./${VENV_NAME}/bin/python" --version
+
+# Set Hugging Face cache (if your script uses it)
+# export HF_HOME="/scratch/ktanahashi/huggingface_cache"
+# export HF_HUB_OFFLINE=1 # Friend's script doesn't show this, assuming network for pip
+
+# Already in PROJECT_DIR
 
 # Start training
-TRAINING_SCRIPT="mseloss_entry.py"
-echo "Starting training script: ${TRAINING_SCRIPT} in $(pwd)" # Added current directory
+TRAINING_SCRIPT="mseloss_entry.py" # Make sure this is your correct script name
+echo ""
+echo "Starting training script: ${TRAINING_SCRIPT} in $(pwd)"
 if [ ! -f "${TRAINING_SCRIPT}" ]; then
     echo "ERROR: Training script ${TRAINING_SCRIPT} not found in $(pwd)"
     exit 1
 fi
-srun --unbuffered python3 "${TRAINING_SCRIPT}"
+# Run the python script using the venv's python interpreter (relative path)
+# Friend's script redirects to job.log: > job.log
+# Keeping SLURM output files for now. If you want to redirect like your friend,
+# you can add "> job.log" to the end of the srun command below.
+srun --unbuffered "./${VENV_NAME}/bin/python" "${TRAINING_SCRIPT}"
 
+echo ""
 echo "Job finished."
