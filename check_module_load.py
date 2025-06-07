@@ -1,6 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import os
 
-model_path = "./facebook/opt-1.3b-llm-streamline-mseloss"
+model_path = os.path.expanduser('~/Desktop/daic_model_results/opt-1.3b-llm-streamline-mseloss')
 
 try:
     print("Loading model...")
