@@ -25,11 +25,30 @@ def replace_lightweight_network(
     model_name,
     num_layers,
 ):
+    # --- Start of Debugging Block ---
+    print("\n[DEBUG] --- Entering replace_lightweight_network function ---")
+    print(f"[DEBUG] Original model has {num_layers} layers.")
+    print(f"[DEBUG] Best layer determined to be: {best_layer}")
+    print(f"[DEBUG] Number of layers to prune: {layer_intervals - 1}")
+    # --- End of Debugging Block ---
+
     pruned_layers = [i for i in range(best_layer + 1, best_layer + layer_intervals)]
+    
+    # --- Start of Debugging Block ---
+    print(f"[DEBUG] Layers to be pruned (will be skipped): {pruned_layers}")
+    # --- End of Debugging Block ---
 
     lightweight_state_dict = lightweight_network.state_dict()
     pruned_weight = pruned_model.state_dict()
     original_weight = model.state_dict()
+    
+    # --- Start of Debugging Block ---
+    print(f"[DEBUG] Size of original weight dictionary: {len(original_weight)} keys")
+    print(f"[DEBUG] Size of new (empty) pruned weight dictionary: {len(pruned_weight)} keys")
+    print(f"[DEBUG] Size of lightweight network dictionary: {len(lightweight_state_dict)} keys")
+    print(f"[DEBUG] Keys available in lightweight network: {list(lightweight_state_dict.keys())}")
+    # --- End of Debugging Block ---
+
 
     if "llama" in model_name.lower():
         # === Handle Llama Model ===
@@ -41,12 +60,15 @@ def replace_lightweight_network(
         j = 0
         for i in range(num_layers):
             if i in pruned_layers:
+                print(f"[DEBUG] Pruning (skipping) original layer {i}")
                 continue
-
+            
+            print(f"[DEBUG] Processing layer mapping: Original Layer {i} -> New Layer {j}")
             pruned_prefix = f"model.layers.{j}"
             original_prefix = f"model.layers.{i}"
 
             if i == best_layer:
+                print(f"[DEBUG] ---> Inserting trained lightweight network at new layer {j}")
                 # Copy Attention and Norms from original, but MLP from lightweight network
                 for key_suffix in ["self_attn.q_proj.weight", "self_attn.k_proj.weight", "self_attn.v_proj.weight", "self_attn.o_proj.weight", "input_layernorm.weight", "post_attention_layernorm.weight"]:
                     pruned_weight[f"{pruned_prefix}.{key_suffix}"] = original_weight[f"{original_prefix}.{key_suffix}"]
@@ -69,12 +91,15 @@ def replace_lightweight_network(
         j = 0
         for i in range(num_layers):
             if i in pruned_layers:
+                print(f"[DEBUG] Pruning (skipping) original layer {i}")
                 continue
-
+            
+            print(f"[DEBUG] Processing layer mapping: Original Layer {i} -> New Layer {j}")
             pruned_prefix = f"model.decoder.layers.{j}"
             original_prefix = f"model.decoder.layers.{i}"
 
             if i == best_layer:
+                print(f"[DEBUG] ---> Inserting trained lightweight network at new layer {j}")
                 # Copy Attention and Norms from original, but FFN from lightweight network
                 for key_suffix in ["self_attn.q_proj.weight", "self_attn.q_proj.bias", "self_attn.k_proj.weight", "self_attn.k_proj.bias", "self_attn.v_proj.weight", "self_attn.v_proj.bias", "self_attn.out_proj.weight", "self_attn.out_proj.bias", "self_attn_layer_norm.weight", "self_attn_layer_norm.bias", "final_layer_norm.weight", "final_layer_norm.bias"]:
                     pruned_weight[f"{pruned_prefix}.{key_suffix}"] = original_weight[f"{original_prefix}.{key_suffix}"]
@@ -91,7 +116,20 @@ def replace_lightweight_network(
     else:
          raise NotImplementedError(f"Weight replacement not implemented for model type: {model_name}")
 
-    pruned_model.load_state_dict(pruned_weight)
+    # --- Start of Debugging Block ---
+    # This is the most critical step. We will wrap it in a try...except block
+    # to catch any errors if the weights don't match the new model's architecture.
+    print(f"\n[DEBUG] Finished constructing weight dictionary. New model should have {j} layers.")
+    print("[DEBUG] Attempting to load the constructed weights into the pruned model shell...")
+    try:
+        pruned_model.load_state_dict(pruned_weight)
+        print("[DEBUG] ✅ SUCCESS: load_state_dict completed without errors.")
+    except Exception as e:
+        print(f"[DEBUG] ❌ FAILED: load_state_dict failed. This is why weights are missing.")
+        print(f"[DEBUG]   - Specific Error: {e}")
+    print("[DEBUG] --- Exiting replace_lightweight_network function ---\n")
+    # --- End of Debugging Block ---
+
     return pruned_model
 
 
@@ -156,6 +194,19 @@ def run():
         args.model_name,
         config.num_hidden_layers + training_args.layer_intervals,
     )
+
+    print("\n--- DEBUGGING MODEL STATE BEFORE SAVING ---")
+    try:
+        # Try to access a weight tensor from a layer in the pruned model
+        # The exact name might vary based on the model architecture (OPT, Llama, etc.)
+        example_tensor = pruned_model.model.decoder.layers[0].fc1.weight
+        print("✅ SUCCESS: Found an example weight tensor.")
+        print(f"   - Tensor shape: {example_tensor.shape}")
+        print(f"   - A few example values: {example_tensor.view(-1)[:5]}")
+    except Exception as e:
+        print(f"❌ ERROR: Could not access an example weight tensor. The 'pruned_model' is likely empty.")
+        print(f"   - Specific error: {e}")
+    print("--- END DEBUGGING ---\n")
 
     pruned_model.save_pretrained("{}-llm-streamline-mseloss".format(args.model_name))
 
