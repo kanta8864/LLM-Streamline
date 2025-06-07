@@ -196,15 +196,17 @@ def lightweight_model_train(
     if use_subset:
         # Option 1: Load streaming dataset and take first N examples
         print(f"Loading subset of {subset_size} examples...")
-        dataset = load_dataset(dataset_name, split=f"train[:{subset_size}]", trust_remote_code=True)
-        
+        dataset = load_from_disk("/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default")
+        subset_size = 10000
+        dataset = dataset.select(range(subset_size))
+
         # Alternative Option 2: Load a percentage of the full dataset
         # dataset = load_dataset(dataset_name, split="train[:1%]", trust_remote_code=True)
         
     else:
         # Original full dataset loading
-        dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
-    
+        dataset = load_from_disk("/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default")
+
     # Get actual dataset size and adjust train_num_data
     actual_dataset_size = len(dataset)
     print(f"Actual dataset size: {actual_dataset_size}")
