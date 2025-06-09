@@ -191,21 +191,23 @@ def lightweight_model_train(
 ):
     # --- STAGE 1: Dataset Processing ---
     dataset_name = "DKYoon/SlimPajama-6B"
-    split_name = "train" 
+    cache_path = "/scratch/ktanahashi/huggingface_cache" # Define your cache path
+    
+    # --- Correctly load the dataset from the cache ---
+    # The 'datasets' library will automatically find the cached files.
+    print(f"Loading '{dataset_name}' from cache: {cache_path}...")
+    full_dataset_dict = load_dataset(dataset_name, cache_dir=cache_path)
+    
+    # --- Select the appropriate split and subset if needed ---
+    # We will work with the 'train' split.
+    dataset = full_dataset_dict['train'] 
     
     if use_subset:
-        # Option 1: Load streaming dataset and take first N examples
-        print(f"Loading subset of {subset_size} examples...")
-        dataset = load_from_disk("/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default/0.0.0/b5f90f419b7489cdba26fdbc8c022fcb5562f968")
         subset_size = 10000
+        print(f"Using a subset of {subset_size} examples from the 'train' split.")
+        # Ensure the subset size is not larger than the dataset itself
+        subset_size = min(subset_size, len(dataset))
         dataset = dataset.select(range(subset_size))
-
-        # Alternative Option 2: Load a percentage of the full dataset
-        # dataset = load_dataset(dataset_name, split="train[:1%]", trust_remote_code=True)
-        
-    else:
-        # Original full dataset loading
-        dataset = load_from_disk("/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default/0.0.0/b5f90f419b7489cdba26fdbc8c022fcb5562f968")
 
     
     # Get actual dataset size and adjust train_num_data
