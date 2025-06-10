@@ -70,19 +70,26 @@ def process_datasets(dataset, train_num_data, tokenizer):
         # Check how many are actually available in the current split
         available_train_samples = len(split["train"])
 
-        # If we want more samples than are available, just take all of them.
-        # Otherwise, split the data to get the number we want.
-        if desired_train_samples >= available_train_samples:
+        if (
+            desired_train_samples >= available_train_samples
+            or available_train_samples <= 2
+        ):
             print(
                 f"INFO: For '{name}', taking all {available_train_samples} available samples for training."
             )
             train_split = split["train"]
         else:
-            # Calculate the test set size needed to leave the desired number of train samples
             test_size_ratio = 1.0 - (desired_train_samples / available_train_samples)
-            train_split = split["train"].train_test_split(test_size=test_size_ratio)[
-                "train"
-            ]
+
+            if test_size_ratio >= 1.0 or test_size_ratio <= 0.0:
+                print(
+                    f"WARNING: Skipping re-split for '{name}' due to small size or invalid ratio."
+                )
+                train_split = split["train"]
+            else:
+                train_split = split["train"].train_test_split(
+                    test_size=test_size_ratio
+                )["train"]
 
         train_datasets.append(train_split)
 
