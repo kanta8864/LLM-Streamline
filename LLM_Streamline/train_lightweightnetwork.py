@@ -13,7 +13,7 @@ from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
 from LLM_Streamline.scheduler import get_cosine_schedule_with_warmup
 from LLM_Streamline.get_cosine import get_cosine_similarity
-from LLM_Streamline.get_train_data import get_data
+from LLM_Streamline.get_train_data import precompute_and_save_data
 from LLM_Streamline.modeling_llama import LlamaMLP
 from LLM_Streamline.modeling_mlp import MLP
 
@@ -31,6 +31,50 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return len(self.input_data)
+
+
+from torch.utils.data import Dataset
+import os
+import torch
+
+
+class TensorDatasetFromDisk(Dataset):
+    """
+    A custom PyTorch Dataset to load tensors saved to disk.
+
+    Args:
+        input_dir (str): Directory containing the input tensors.
+        output_dir (str): Directory containing the output tensors.
+    """
+
+    def __init__(self, input_dir, output_dir):
+        self.input_dir = input_dir
+        self.output_dir = output_dir
+
+        # Assuming filenames are sorted and correspond to each other
+        self.input_files = sorted(
+            os.listdir(input_dir), key=lambda x: int(x.split("_")[1].split(".")[0])
+        )
+        self.output_files = sorted(
+            os.listdir(output_dir), key=lambda x: int(x.split("_")[1].split(".")[0])
+        )
+
+        assert len(self.input_files) == len(
+            self.output_files
+        ), "Mismatch in number of input and output files"
+
+    def __len__(self):
+        return len(self.input_files)
+
+    def __getitem__(self, idx):
+        # Load the input and output tensors for the given index
+        input_path = os.path.join(self.input_dir, self.input_files[idx])
+        output_path = os.path.join(self.output_dir, self.output_files[idx])
+
+        input_tensor = torch.load(input_path)
+        output_tensor = torch.load(output_path)
+
+        return input_tensor, output_tensor
 
 
 def process_datasets(dataset, train_num_data, tokenizer):
@@ -206,37 +250,25 @@ def lightweight_model_train(
     config,
     model_name,
     gradient_accumulation_step,
-    use_subset=True,  # Add this parameter
-    subset_size=10000,  # Add this parameter
+    use_subset=True,
+    subset_size=10000,
 ):
     # --- STAGE 1: Dataset Processing ---
+    # (This part remains the same)
     dataset_name = "DKYoon/SlimPajama-6B"
     split_name = "train"
-
     if use_subset:
-        # Option 1: Load streaming dataset and take first N examples
         print(f"Loading subset of {subset_size} examples...")
-        dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
-        dataset = dataset.select(range(subset_size))
-
-        # Alternative Option 2: Load a percentage of the full dataset
-        # dataset = load_dataset(dataset_name, split="train[:1%]", trust_remote_code=True)
-
+        dataset = load_dataset(
+            dataset_name, split=split_name, trust_remote_code=True
+        ).select(range(subset_size))
     else:
-        # Original full dataset loading
         dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
 
-    # Get actual dataset size and adjust train_num_data
     actual_dataset_size = len(dataset)
-    print(f"Actual dataset size: {actual_dataset_size}")
-
-    # Ensure train_num_data doesn't exceed 80% of actual dataset size
     max_train_size = int(actual_dataset_size * 0.8)
     train_num_data = min(train_num_data, max_train_size)
 
-    print(f"Using train_num_data: {train_num_data} (max possible: {max_train_size})")
-
-    # Additional safety check
     if train_num_data >= actual_dataset_size:
         raise ValueError(
             f"train_num_data ({train_num_data}) must be less than dataset size ({actual_dataset_size})"
@@ -245,44 +277,82 @@ def lightweight_model_train(
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)
 
     # --- STAGE 2: Find Best Layer ---
+    # (This part remains the same)
     best_layer = get_cosine_similarity(
         model, dataset, cosine_num_data, device, layer_intervals, num_layer
     )
-
     replace_model = init_layer(model_name, config, device)
 
-    # --- STAGE 3: Pre-compute hidden states (if they don't exist) ---
+    # --- STAGE 3: Pre-compute and Save Hidden States (NEW LOGIC) ---
+    # Define directories where the processed tensors will be stored
     train_data_dir = "./precomputed_data/train"
     test_data_dir = "./precomputed_data/test"
 
-    def prepare_dataset_for_training(dataset, model, device):
-        input_list, output_list = get_data(
-            model, dataset, device, layer_intervals, best_layer, tokenizer, batch_size
-        )
-        return CustomDataset(input_list, output_list)
-
-    print(
-        f"The test dataset has {len(test_dataset)} samples, so there will be {len(test_dataset)/batch_size} iterations."
+    # Process and save the test dataset
+    print("\n--- Processing Test Dataset ---")
+    precompute_and_save_data(
+        model=model,
+        dataset=test_dataset,
+        tokenizer=tokenizer,
+        layer_intervals=layer_intervals,
+        best_layer=best_layer,
+        batch_size=batch_size,  # Use a small batch size for pre-computation to avoid OOM
+        save_dir=test_data_dir,
+        device=device,
     )
 
-    test_dataset = prepare_dataset_for_training(test_dataset, model, device)
-
-    # Add this line to see the size of the next dataset:
-    print(
-        f"The training dataset has {len(dataset)} samples, so there will be {len(dataset)/batch_size} iterations."
+    # Process and save the training dataset
+    print("\n--- Processing Training Dataset ---")
+    precompute_and_save_data(
+        model=model,
+        dataset=dataset,
+        tokenizer=tokenizer,
+        layer_intervals=layer_intervals,
+        best_layer=best_layer,
+        batch_size=batch_size,
+        save_dir=train_data_dir,
+        device=device,
     )
-    train_dataset = prepare_dataset_for_training(dataset, model, device)
 
-    test_dataloader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=0
+    # IMPORTANT: Free up memory by deleting the large model after pre-computation
+    print("Pre-computation finished. Deleting the large model from memory.")
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # --- STAGE 4: Load Data from Disk and Train (NEW LOGIC) ---
+    print("\n--- Initializing Datasets from Disk for Training ---")
+
+    # Create datasets that load tensors directly from your saved files
+    train_dataset_from_disk = TensorDatasetFromDisk(
+        input_dir=os.path.join(train_data_dir, "input"),
+        output_dir=os.path.join(train_data_dir, "output"),
     )
-    print("test data loader completed")
+    test_dataset_from_disk = TensorDatasetFromDisk(
+        input_dir=os.path.join(test_data_dir, "input"),
+        output_dir=os.path.join(test_data_dir, "output"),
+    )
 
+    # Create DataLoaders with the disk-based datasets
+    # You can now use a larger batch size for MLP training if your GPU allows
     train_dataloader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=0
+        train_dataset_from_disk,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
     )
-    print("train data loader completed")
+    test_dataloader = DataLoader(
+        test_dataset_from_disk,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+    )
+    print("DataLoaders created successfully.")
 
+    # --- STAGE 5: Training Loop ---
+    # (This part remains mostly the same, it now uses the new dataloaders)
     criterion = nn.MSELoss()
     optimizer = torch.optim.AdamW(replace_model.parameters(), lr=lr, weight_decay=wd)
     scheduler = get_cosine_schedule_with_warmup(
@@ -294,8 +364,8 @@ def lightweight_model_train(
     )
 
     best_loss = valid_model(replace_model, test_dataloader, device)
-    print("Before training, Validation_Loss:", best_loss)
-    print("Starting training...")
+    print(f"Before training, Validation_Loss: {best_loss:.6f}")
+    print("Starting MLP training...")
     best_state_dict = None
 
     for epoch in range(epochs):
@@ -306,10 +376,7 @@ def lightweight_model_train(
         for input_data, output_data in tqdm(train_dataloader, desc=f"Epoch {epoch}"):
             input_data = input_data.to(device)
             output_data = output_data.to(device)
-
-            # Simple MLP models only need the input tensor
             output = replace_model(input_data)
-
             loss = criterion(output, output_data)
             loss /= gradient_accumulation_step
             loss.backward()
@@ -319,23 +386,13 @@ def lightweight_model_train(
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
-
-            del input_data, output_data, output, loss
-            torch.cuda.empty_cache()
-
             step += 1
 
         valid_loss = valid_model(replace_model, test_dataloader, device)
-
         if valid_loss < best_loss:
             best_loss = valid_loss
             best_state_dict = replace_model.state_dict()
-
         print(f"Epoch: {epoch}, Validation Loss: {valid_loss:.6f}")
 
-        torch.cuda.empty_cache()
-        gc.collect()
-
     replace_model.load_state_dict(best_state_dict)
-
     return replace_model, best_layer
