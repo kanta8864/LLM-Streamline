@@ -1,47 +1,40 @@
-import tensorflow as tf
-import numpy as np
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import os
 
-model_path = os.path.expanduser(
+model_dir = os.path.expanduser(
     "~/LLM-Streamline/facebook/opt-1.3b-llm-streamline-mseloss"
 )
 
 
 def main():
-    # Load the model
-    print(f"Loading model from: {model_path}")
-    model = tf.saved_model.load(model_path)
+    print(f"Loading model and tokenizer from {model_dir} ...")
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_dir, torch_dtype=torch.float16, device_map="auto"
+    )
 
-    # Create a dummy input matching typical input shape
-    # This depends on your model's input signature
-    # Let's assume the model takes input_ids tensor of shape (batch_size, sequence_length)
-    # For example, batch_size=1, sequence_length=10
-    dummy_input = tf.constant([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], dtype=tf.int32)
+    # Dummy input text
+    input_text = "Hello, how are you?"
 
-    # Depending on model, call might differ — here we try the simplest
-    try:
-        output = model(dummy_input)
-    except Exception as e:
-        print("Model call failed:", e)
-        return
+    # Tokenize input
+    inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
 
-    # Print output info
-    print("Model output type:", type(output))
-    if isinstance(output, dict):
-        for k, v in output.items():
-            print(
-                f"Output '{k}': type={type(v)}, shape={v.shape if hasattr(v, 'shape') else 'N/A'}"
-            )
-    elif isinstance(output, (list, tuple)):
-        for i, v in enumerate(output):
-            print(
-                f"Output[{i}]: type={type(v)}, shape={v.shape if hasattr(v, 'shape') else 'N/A'}"
-            )
-    else:
-        print(f"Output shape: {output.shape if hasattr(output, 'shape') else 'N/A'}")
-        print(
-            f"Output value (sample): {output.numpy() if hasattr(output, 'numpy') else output}"
-        )
+    # Run model (no grad for speed)
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    # Print output keys and shapes
+    print("Output keys:", outputs.keys())
+    for key, value in outputs.items():
+        if isinstance(value, torch.Tensor):
+            print(f"  {key}: shape {value.shape}")
+        else:
+            print(f"  {key}: {type(value)}")
+
+    # Example: print logits shape and a sample
+    if "logits" in outputs:
+        print("Sample logits (first token):", outputs.logits[0, 0, :5])
 
 
 if __name__ == "__main__":
