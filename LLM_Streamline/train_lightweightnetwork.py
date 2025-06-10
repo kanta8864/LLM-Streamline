@@ -59,6 +59,12 @@ def process_datasets(dataset, train_num_data, tokenizer):
 
     for name, proportion in proportions.items():
         dataset_len = len(filtered_datasets[name])
+        if dataset_len <= 2:
+            print(
+                f"WARNING: Skipping '{name}' because it only has {dataset_len} samples."
+            )
+            continue
+
         raw_test_size = 3000 * proportion
         test_size = min(raw_test_size / dataset_len, 0.5) if dataset_len > 1 else 0.1
 
@@ -201,7 +207,7 @@ def lightweight_model_train(
     model_name,
     gradient_accumulation_step,
     use_subset=True,  # Add this parameter
-    subset_size=5000,  # Add this parameter
+    subset_size=10000,  # Add this parameter
 ):
     # --- STAGE 1: Dataset Processing ---
     dataset_name = "DKYoon/SlimPajama-6B"
