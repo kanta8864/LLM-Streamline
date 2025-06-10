@@ -192,7 +192,7 @@ def lightweight_model_train(
     model_name,
     gradient_accumulation_step,
     use_subset=True,  # Add this parameter
-    subset_size=10000,  # Add this parameter
+    subset_size=3000,  # Add this parameter
 ):
     # --- STAGE 1: Dataset Processing ---
     dataset_name = "DKYoon/SlimPajama-6B"
@@ -247,7 +247,16 @@ def lightweight_model_train(
         )
         return CustomDataset(input_list, output_list)
 
+    print(
+        f"The test dataset has {len(test_dataset)} samples, so there will be {len(test_dataset)} iterations."
+    )
+
     test_dataset = prepare_dataset_for_training(test_dataset, model, device)
+
+    # Add this line to see the size of the next dataset:
+    print(
+        f"The training dataset has {len(dataset)} samples, so there will be {len(dataset)} iterations."
+    )
     train_dataset = prepare_dataset_for_training(dataset, model, device)
 
     test_dataloader = DataLoader(

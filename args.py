@@ -37,7 +37,7 @@ class TrainingArguments(DefaultTrainingArguments):
     cosine_num_data: Optional[int] = field(default=50)
     train_num_data: Optional[int] = field(default=10000)
 
-    batch_size: Optional[int] = field(default=1)
+    batch_size: Optional[int] = field(default=4)
 
     gradient_accumulation_step: Optional[int] = field(default=16)
 
