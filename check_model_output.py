@@ -1,38 +1,28 @@
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import os
 
-model_dir = os.path.expanduser(
-    "~/LLM-Streamline/facebook/opt-1.3b-llm-streamline-mseloss"
+model_dir = (
+    "/home/kantatanahashi/LLM-Streamline/facebook/opt-1.3b-llm-streamline-mseloss"
 )
+base_model_name = "facebook/opt-1.3b"  # or the base model you started with
 
 
 def main():
-    print(f"Loading model and tokenizer from {model_dir} ...")
-    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    print(f"Loading tokenizer from base model {base_model_name} ...")
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+
+    print(f"Loading model weights from {model_dir} ...")
     model = AutoModelForCausalLM.from_pretrained(
         model_dir, torch_dtype=torch.float16, device_map="auto"
     )
 
-    # Dummy input text
     input_text = "Hello, how are you?"
-
-    # Tokenize input
     inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
 
-    # Run model (no grad for speed)
     with torch.no_grad():
         outputs = model(**inputs)
 
-    # Print output keys and shapes
     print("Output keys:", outputs.keys())
-    for key, value in outputs.items():
-        if isinstance(value, torch.Tensor):
-            print(f"  {key}: shape {value.shape}")
-        else:
-            print(f"  {key}: {type(value)}")
-
-    # Example: print logits shape and a sample
     if "logits" in outputs:
         print("Sample logits (first token):", outputs.logits[0, 0, :5])
 
