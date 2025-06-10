@@ -202,7 +202,6 @@ def lightweight_model_train(
         # Option 1: Load streaming dataset and take first N examples
         print(f"Loading subset of {subset_size} examples...")
         dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
-        subset_size = 10000
         dataset = dataset.select(range(subset_size))
 
         # Alternative Option 2: Load a percentage of the full dataset
