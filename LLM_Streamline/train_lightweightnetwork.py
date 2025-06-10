@@ -248,14 +248,14 @@ def lightweight_model_train(
         return CustomDataset(input_list, output_list)
 
     print(
-        f"The test dataset has {len(test_dataset)} samples, so there will be {len(test_dataset)} iterations."
+        f"The test dataset has {len(test_dataset)} samples, so there will be {len(test_dataset)/batch_size} iterations."
     )
 
     test_dataset = prepare_dataset_for_training(test_dataset, model, device)
 
     # Add this line to see the size of the next dataset:
     print(
-        f"The training dataset has {len(dataset)} samples, so there will be {len(dataset)} iterations."
+        f"The training dataset has {len(dataset)} samples, so there will be {len(dataset)/batch_size} iterations."
     )
     train_dataset = prepare_dataset_for_training(dataset, model, device)
 

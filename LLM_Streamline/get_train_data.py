@@ -6,8 +6,11 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from accelerate import Accelerator
 
-@torch.no_grad() 
-def get_data(model, dataset, device, layer_intervals, best_layer, tokenizer, batch_size):
+
+@torch.no_grad()
+def get_data(
+    model, dataset, device, layer_intervals, best_layer, tokenizer, batch_size
+):
     input_list = []
     output_list = []
 
@@ -19,20 +22,21 @@ def get_data(model, dataset, device, layer_intervals, best_layer, tokenizer, bat
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     dataloader = DataLoader(
-        dataset, 
-        shuffle=True, 
-        collate_fn=data_collator, 
-        batch_size=batch_size
+        dataset,
+        shuffle=True,
+        collate_fn=data_collator,
+        batch_size=batch_size,
+        num_workers=6,
     )
     dataloader = accelerator.prepare(dataloader)
 
     try:
         for step, batch in tqdm(enumerate(dataloader)):
-        
+
             hidden_states = model(
-                input_ids=batch['input_ids'],
-                attention_mask=batch['attention_mask'],
-                output_hidden_states=True
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                output_hidden_states=True,
             ).hidden_states
 
             input_tensor = hidden_states[best_layer].cpu()
@@ -49,5 +53,5 @@ def get_data(model, dataset, device, layer_intervals, best_layer, tokenizer, bat
         model.cpu()
         del model
         gc.collect()
-    
+
     return input_list, output_list
