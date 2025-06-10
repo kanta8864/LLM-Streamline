@@ -2,39 +2,45 @@ Bootstrap: docker
 From: nvidia/cuda:12.1.1-devel-ubuntu22.04
 Stage: build
 
-%files
-    # Copy requirements into the build stage
-    ./requirements.txt /tmp/requirements.txt
-
 %post
-    export DEBIAN_FRONTEND=noninteractive
+# This section runs only in the 'build' stage.
+export DEBIAN_FRONTEND=noninteractive
 
-    # Install Python and the venv tool
-    apt-get update && apt-get install -y --no-install-recommends \
-        python3.10 \
-        python3.10-venv \
-        && rm -rf /var/lib/apt/lists/*
+# Update and install Python and the venv tool
+apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-venv \
+&& rm -rf /var/lib/apt/lists/*
 
-    # Create a self-contained virtual environment
-    python3.10 -m venv /opt/venv
+# Create a self-contained virtual environment
+python3.10 -m venv /opt/venv
 
-    # Install your packages into the venv
-    /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
-
+# Install your specific packages directly.
+/opt/venv/bin/pip install --no-cache-dir \
+    'datasets==2.21.0' \
+    'numpy==1.26.4' \
+    'peft==0.10.0' \
+    'torch==2.2.1' \
+    'tqdm==4.66.3' \
+    'transformers==4.45.2' \
+    'deepspeed==0.14.4' \
+    'accelerate==0.33.0'
 
 Bootstrap: docker
 From: nvidia/cuda:12.1.1-base-ubuntu22.04
 
 %files from build
-    # This is the key step: copy ONLY the clean virtual
-    # environment from the 'build' stage into our final image.
-    /opt/venv /opt/venv
+# This is the key step: copy ONLY the clean virtual
+# environment from the 'build' stage into our final image.
+/opt/venv /opt/venv
 
 %environment
-    # Set up the environment to use Python from our venv
-    export PATH="/opt/venv/bin:$PATH"
-    export VIRTUAL_ENV="/opt/venv"
+# Set up the environment to use Python from our venv
+export PATH="/opt/venv/bin:$PATH"
+export VIRTUAL_ENV="/opt/venv"
+export TOKENIZERS_PARALLELISM=false
 
 %runscript
-    echo "Container is running. Python version:"
-    python3 --version
+echo "Container is running. Python version:"
+python3 --version
+echo "To run your script, use: singularity exec <container.sif> python3 your_script.py"
