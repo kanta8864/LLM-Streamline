@@ -58,9 +58,11 @@ def process_datasets(dataset, train_num_data, tokenizer):
     train_datasets = []
 
     for name, proportion in proportions.items():
-        split = filtered_datasets[name].train_test_split(
-            test_size=(3000 * proportion) / len(filtered_datasets[name])
-        )
+        dataset_len = len(filtered_datasets[name])
+        raw_test_size = 3000 * proportion
+        test_size = min(raw_test_size / dataset_len, 0.5) if dataset_len > 1 else 0.1
+
+        split = filtered_datasets[name].train_test_split(test_size=test_size)
         test_datasets.append(split["test"])
         # Calculate how many training samples we *want* for this slice
         desired_train_samples = int(train_num_data * proportion)
@@ -201,7 +203,14 @@ def lightweight_model_train(
     if use_subset:
         # Option 1: Load streaming dataset and take first N examples
         print(f"Loading subset of {subset_size} examples...")
+<<<<<<< Updated upstream
         dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
+=======
+        dataset = load_from_disk(
+            "/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default"
+        )
+        subset_size = 10000
+>>>>>>> Stashed changes
         dataset = dataset.select(range(subset_size))
 
         # Alternative Option 2: Load a percentage of the full dataset
@@ -209,7 +218,13 @@ def lightweight_model_train(
 
     else:
         # Original full dataset loading
+<<<<<<< Updated upstream
         dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
+=======
+        dataset = load_from_disk(
+            "/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default"
+        )
+>>>>>>> Stashed changes
 
     # Get actual dataset size and adjust train_num_data
     actual_dataset_size = len(dataset)
