@@ -1,52 +1,41 @@
 #!/bin/bash
+# File: run_job_test.sh
 
-#SBATCH --job-name="apptainer-deepspeed"
-#SBATCH --time=1:00:00
-#SBATCH --ntasks=1
-#SBATCH --gpus-per-task=1
-#SBATCH --cpus-per-task=15
-#SBATCH --partition=gpu-a100
-#SBATCH --mem-per-cpu=8000M  
-#SBATCH --account=education-eemcs-msc-cs
+# --- Slurm Resource Request ---
+#SBATCH --job-name=deepspeed-test-run
+#SBATCH --partition=general
+#SBATCH --time=03:00:00              # Request 1 hour for a test run
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8            # Request 8 CPU cores
+#SBATCH --mem=256G                    # Request 64 GB of memory
+#SBATCH --output=slurm_test_output_%j.log
 
-# --- Paths and Environment ---
-PROJECT_DIR="/scratch/ktanahashi/LLM-Streamline"
-CONTAINER_PATH="${PROJECT_DIR}/my_deepspeed_env.sif"
-
-# Set Hugging Face cache
-export HF_HOME="/scratch/ktanahashi/huggingface_cache"
-# Only set offline mode if you're sure all data is cached
-# export HF_HUB_OFFLINE=1
-
-# --- Load Modules ---
-echo "Loading modules..."
-module load 2024r1
-module load cuda/12.1
-module load apptainer
+# --- GPU Request ---
+# This line actively requests one NVIDIA L40 GPU.
+#SBATCH --gres=gpu:l40:1
 
 # --- Job Execution ---
 echo "Job started on $(hostname)"
-echo "Project directory: ${PROJECT_DIR}"
-echo "Container path: ${CONTAINER_PATH}"
+echo "Running in directory: $(pwd)"
+echo "Allocated GPU: $CUDA_VISIBLE_DEVICES"
 
-# Navigate to project directory
-cd "${PROJECT_DIR}" || { echo "ERROR: Failed to cd to ${PROJECT_DIR}."; exit 1; }
+# --- Define Paths ---
+# Define path to your container image (assuming it's in your home directory)
+CONTAINER_PATH="$HOME/my_deepspeed_env.sif"
 
-# Check if container exists
-if [ ! -f "${CONTAINER_PATH}" ]; then
-    echo "ERROR: Container file not found at ${CONTAINER_PATH}"
-    exit 1
-fi
+# --- NEW: Set Caches to the Node's Temporary /tmp Directory ---
+# This creates a unique temp dir for your job to avoid conflicts
+JOB_TMP_DIR="/tmp/${SLURM_JOB_ID}"
+export HF_HOME="${JOB_TMP_DIR}/huggingface_cache"
+mkdir -p "${HF_HOME}"
+echo "Using temporary cache for this job: ${HF_HOME}"
 
-echo "Container found. Starting execution..."
-
-# --- Run Code Inside the Apptainer Container ---
+# --- Run Code Inside Apptainer ---
+# Note the `--bind /tmp` to make the cache visible inside the container
 apptainer exec \
-    --nv \
-    --bind "${PROJECT_DIR}":"/app" \
-    --bind /scratch \
-    --pwd /app \
-    "${CONTAINER_PATH}" \
-    accelerate launch mseloss_entry.py --with_tracking
-
-echo "Job finished."
+--nv \
+--bind $(pwd) \
+--bind /tmp \
+"$CONTAINER_PATH" \
+accelerate launch mseloss_entry.py --with_tracking
