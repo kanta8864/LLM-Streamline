@@ -26,7 +26,7 @@ def get_data(
         shuffle=True,
         collate_fn=data_collator,
         batch_size=batch_size,
-        num_workers=6,
+        num_workers=0,
     )
     dataloader = accelerator.prepare(dataloader)
 
