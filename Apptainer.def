@@ -2,63 +2,39 @@ Bootstrap: docker
 From: nvidia/cuda:12.1.1-devel-ubuntu22.04
 Stage: build
 
-################################################################################
-
-STAGE 1: Build Environment
-We use the larger 'devel' image here because it contains all the necessary
-build tools (compilers, headers) that pip might need to install packages
-from your requirements.txt. This entire stage will be discarded later.
-################################################################################
-
 %files
-# Copy requirements file into the build stage
-./requirements.txt /tmp/requirements.txt
+    # Copy requirements into the build stage
+    ./requirements.txt /tmp/requirements.txt
 
 %post
-# This section runs only in the 'build' stage.
-export DEBIAN_FRONTEND=noninteractive
+    export DEBIAN_FRONTEND=noninteractive
 
-# Update and install Python and venv tool
-apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-venv \
-    && rm -rf /var/lib/apt/lists/*
+    # Install Python and the venv tool
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-venv \
+        && rm -rf /var/lib/apt/lists/*
 
-# Create the virtual environment
-python3.10 -m venv /opt/venv
+    # Create a self-contained virtual environment
+    python3.10 -m venv /opt/venv
 
-# Install packages into the venv. Using the venv's pip ensures everything
-# is self-contained. The --no-cache-dir flag is crucial for size.
-/opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+    # Install your packages into the venv
+    /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
-################################################################################
-
-STAGE 2: Final Runtime Environment
-Now we start fresh with a minimal base image. This will be our final,
-lightweight container. It doesn't have the build tools, only the CUDA runtime.
-################################################################################
 
 Bootstrap: docker
 From: nvidia/cuda:12.1.1-base-ubuntu22.04
 
 %files from build
-# This is the magic step. We copy ONLY the virtual environment we created
-# in the 'build' stage into our new, clean container.
-/opt/venv /opt/venv
+    # This is the key step: copy ONLY the clean virtual
+    # environment from the 'build' stage into our final image.
+    /opt/venv /opt/venv
 
 %environment
-# Set up the environment to use the Python from our venv by default.
-# This ensures that when you run the container, you are already inside
-# the activated virtual environment.
-export PATH="/opt/venv/bin:$PATH"
-export VIRTUAL_ENV="/opt/venv"
-# Prevent the tokenizer library from giving parallelism warnings
-export TOKENIZERS_PARALLELISM=false
+    # Set up the environment to use Python from our venv
+    export PATH="/opt/venv/bin:$PATH"
+    export VIRTUAL_ENV="/opt/venv"
 
 %runscript
-# This command runs when you execute the container (e.g., singularity run my_app.sif).
-# It will execute the python interpreter from our virtual environment.
-# You can change this to run your main application script.
-echo "Container is running. Python version:"
-python3 --version
-echo "To run your script, use: singularity exec <container.sif> python3 your_script.py"
+    echo "Container is running. Python version:"
+    python3 --version
