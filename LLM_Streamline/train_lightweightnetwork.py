@@ -192,7 +192,7 @@ def lightweight_model_train(
     model_name,
     gradient_accumulation_step,
     use_subset=True,  # Add this parameter
-    subset_size=3000,  # Add this parameter
+    subset_size=1000,  # Add this parameter
 ):
     # --- STAGE 1: Dataset Processing ---
     dataset_name = "DKYoon/SlimPajama-6B"
