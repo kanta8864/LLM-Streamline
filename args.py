@@ -14,7 +14,7 @@ class ModelArguments:
         metadata={
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
-        default="/scratch/ktanahashi/huggingface_cache/models--meta-llama--Llama-3.1-8B/snapshots/d04e592bb4f6aa9cfee91e2e20afa771667e1d4b/",
+        default="facebook/opt-1.3b",
     )
 
     use_fast: bool = field(
