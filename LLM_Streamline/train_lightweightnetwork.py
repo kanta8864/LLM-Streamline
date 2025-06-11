@@ -290,6 +290,7 @@ def lightweight_model_train(
 
     # Process and save the test dataset
     print("\n--- Processing Test Dataset ---")
+    print(len(test_dataset))
     precompute_and_save_data(
         model=model,
         dataset=test_dataset,
@@ -303,6 +304,7 @@ def lightweight_model_train(
 
     # Process and save the training dataset
     print("\n--- Processing Training Dataset ---")
+    print(len(dataset))
     precompute_and_save_data(
         model=model,
         dataset=dataset,

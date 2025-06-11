@@ -57,8 +57,10 @@ def precompute_and_save_data(
                     output_hidden_states=True,
                 ).hidden_states
 
-            input_tensor = hidden_states[best_layer].cpu()
-            output_tensor = hidden_states[best_layer + layer_intervals].cpu()
+            input_tensor = hidden_states[best_layer].cpu().to(torch.float16)
+            output_tensor = (
+                hidden_states[best_layer + layer_intervals].cpu().to(torch.float16)
+            )
 
             for i in range(input_tensor.size(0)):
                 sample_idx = step * batch_size + i
