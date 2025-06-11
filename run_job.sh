@@ -16,10 +16,12 @@
 #SBATCH --gres=gpu:l40:1
 
 # --- Load Required Modules ---
-# It's crucial to load the cuda module on the host so that
-# the $CUDA_HOME variable is set and its libraries can be passed to the container.
+# FIX: Load the base module environment and a specific version of CUDA.
+# The error "module(s) are unknown: 'cuda'" means we must specify a version.
 echo "Loading modules..."
-module load cuda
+module load 2024r1
+module load cuda/12.1
+module load apptainer
 
 # --- Job Execution ---
 echo "Job started on $(hostname)"
@@ -45,8 +47,8 @@ mkdir -p "${HF_HOME}"
 echo "Using temporary cache for this job: ${HF_HOME}"
 
 # --- Run Code Inside Apptainer ---
-# THE FIX: We add the --env flag to set LD_LIBRARY_PATH inside the container.
-# This tells the 'accelerate' command where to find the host's CUDA libraries.
+# This command should now work because `module load cuda/12.1` will
+# correctly set the ${CUDA_HOME} variable needed for the LD_LIBRARY_PATH.
 echo "Starting container execution..."
 apptainer exec \
     --nv \
