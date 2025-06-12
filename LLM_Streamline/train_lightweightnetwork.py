@@ -195,6 +195,11 @@ def lightweight_model_train(
     dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)
 
+
+    print("dataset size: ", len(dataset))
+    print("test dataset size: ", len(test_dataset))
+
+
     best_layer = get_cosine_similarity(
         model, dataset, cosine_num_data, device, layer_intervals, num_layer
     )
