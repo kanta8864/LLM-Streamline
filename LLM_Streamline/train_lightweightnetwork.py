@@ -250,7 +250,7 @@ def lightweight_model_train(
     config,
     model_name,
     gradient_accumulation_step,
-    use_subset=True,
+    use_subset=False,
     subset_size=1000,
 ):
     # --- STAGE 1: Dataset Processing ---
