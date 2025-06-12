@@ -13,7 +13,7 @@
 
 # --- GPU Request ---
 # This line actively requests one NVIDIA L40 GPU.
-#SBATCH --gres=gpu:l40:1
+#SBATCH --gres=gpu:a40:1
 
 # --- Load Required Modules ---
 # FIX: Load the base module environment and a specific version of CUDA.
