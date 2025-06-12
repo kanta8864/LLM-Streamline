@@ -189,51 +189,17 @@ def lightweight_model_train(
     use_subset=False,  # Add this parameter
     subset_size=10000,  # Add this parameter
 ):
-    # --- STAGE 1: Dataset Processing ---
     dataset_name = "DKYoon/SlimPajama-6B"
     split_name = "train" 
-    
-    if use_subset:
-        # Option 1: Load streaming dataset and take first N examples
-        print(f"Loading subset of {subset_size} examples...")
-        dataset = load_from_disk("/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default")
-        subset_size = 10000
-        dataset = dataset.select(range(subset_size))
 
-        # Alternative Option 2: Load a percentage of the full dataset
-        # dataset = load_dataset(dataset_name, split="train[:1%]", trust_remote_code=True)
-        
-    else:
-        # Original full dataset loading
-        dataset = load_from_disk("/scratch/ktanahashi/huggingface_cache/datasets/DKYoon___slim_pajama-6_b/default")
-
-    # Get actual dataset size and adjust train_num_data
-    actual_dataset_size = len(dataset)
-    print(f"Actual dataset size: {actual_dataset_size}")
-    
-    # Ensure train_num_data doesn't exceed 80% of actual dataset size
-    max_train_size = int(actual_dataset_size * 0.8)
-    train_num_data = min(train_num_data, max_train_size)
-    
-    print(f"Using train_num_data: {train_num_data} (max possible: {max_train_size})")
-    
-    # Additional safety check
-    if train_num_data >= actual_dataset_size:
-        raise ValueError(f"train_num_data ({train_num_data}) must be less than dataset size ({actual_dataset_size})")
-    
+    dataset = load_dataset(dataset_name, split=split_name, trust_remote_code=True)
     dataset, test_dataset = process_datasets(dataset, train_num_data, tokenizer)
 
-    # --- STAGE 2: Find Best Layer ---
     best_layer = get_cosine_similarity(
         model, dataset, cosine_num_data, device, layer_intervals, num_layer
     )
     
     replace_model = init_layer(model_name, config, device)
-
-    # --- STAGE 3: Pre-compute hidden states (if they don't exist) ---
-    train_data_dir = "./precomputed_data/train"
-    test_data_dir = "./precomputed_data/test"
-
 
     def prepare_dataset_for_training(dataset, model, device):
         input_list, output_list = get_data(
