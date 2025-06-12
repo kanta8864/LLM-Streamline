@@ -13,7 +13,7 @@ from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
 from LLM_Streamline.scheduler import get_cosine_schedule_with_warmup
 from LLM_Streamline.get_cosine import get_cosine_similarity
-from LLM_Streamline.get_train_data import get_data
+from LLM_Streamline.get_train_data import precompute_and_save_data
 from LLM_Streamline.modeling_llama import LlamaMLP
 from LLM_Streamline.modeling_mlp import MLP
 
@@ -283,24 +283,75 @@ def lightweight_model_train(
     )
     replace_model = init_layer(model_name, config, device)
 
-    def prepare_dataset_for_training(dataset, model, device):
-        input_list, output_list = get_data(
-            model, dataset, device, layer_intervals, best_layer, tokenizer, batch_size
-        )
-        return CustomDataset(input_list, output_list)
+    # --- STAGE 3: Pre-compute and Save Hidden States (NEW LOGIC) ---
+    # Define directories where the processed tensors will be stored
+    train_data_dir = "./precomputed_data/train"
+    test_data_dir = "./precomputed_data/test"
 
-    test_dataset = prepare_dataset_for_training(test_dataset, model, device)
-    train_dataset = prepare_dataset_for_training(dataset, model, device)
-
-    test_dataloader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=0
+    # Process and save the test dataset
+    print("\n--- Processing Test Dataset ---")
+    print(len(test_dataset))
+    precompute_and_save_data(
+        model=model,
+        dataset=test_dataset,
+        tokenizer=tokenizer,
+        layer_intervals=layer_intervals,
+        best_layer=best_layer,
+        batch_size=batch_size,  # Use a small batch size for pre-computation to avoid OOM
+        save_dir=test_data_dir,
+        device=device,
     )
-    print("test data loader completed")
 
+    # Process and save the training dataset
+    print("\n--- Processing Training Dataset ---")
+    print(len(dataset))
+    precompute_and_save_data(
+        model=model,
+        dataset=dataset,
+        tokenizer=tokenizer,
+        layer_intervals=layer_intervals,
+        best_layer=best_layer,
+        batch_size=batch_size,
+        save_dir=train_data_dir,
+        device=device,
+    )
+
+    # IMPORTANT: Free up memory by deleting the large model after pre-computation
+    print("Pre-computation finished. Deleting the large model from memory.")
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # --- STAGE 4: Load Data from Disk and Train (NEW LOGIC) ---
+    print("\n--- Initializing Datasets from Disk for Training ---")
+
+    # Create datasets that load tensors directly from your saved files
+    train_dataset_from_disk = TensorDatasetFromDisk(
+        input_dir=os.path.join(train_data_dir, "input"),
+        output_dir=os.path.join(train_data_dir, "output"),
+    )
+    test_dataset_from_disk = TensorDatasetFromDisk(
+        input_dir=os.path.join(test_data_dir, "input"),
+        output_dir=os.path.join(test_data_dir, "output"),
+    )
+
+    # Create DataLoaders with the disk-based datasets
+    # You can now use a larger batch size for MLP training if your GPU allows
     train_dataloader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=0
+        train_dataset_from_disk,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
     )
-    print("train data loader completed")
+    test_dataloader = DataLoader(
+        test_dataset_from_disk,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+    )
+    print("DataLoaders created successfully.")
     
     # --- STAGE 5: Training Loop ---
     # (This part remains mostly the same, it now uses the new dataloaders)
