@@ -1,46 +1,56 @@
 Bootstrap: docker
 From: nvidia/cuda:12.1.1-devel-ubuntu22.04
-Stage: build
 
 %post
-# This section runs only in the 'build' stage.
-export DEBIAN_FRONTEND=noninteractive
+    # This section defines the entire build process.
+    # We use the 'devel' image because packages like deepspeed need the
+    # full CUDA toolkit (compilers) to install correctly.
+    
+    export DEBIAN_FRONTEND=noninteractive
 
-# Update and install Python and the venv tool
-apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-venv \
-&& rm -rf /var/lib/apt/lists/*
+    # 1. Update and install system dependencies like Python
+    echo "--> Installing Python 3.10 and venv..."
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-venv \
+        git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create a self-contained virtual environment
-python3.10 -m venv /opt/venv
+    # 2. Create a self-contained Python virtual environment inside the container
+    echo "--> Creating Python virtual environment at /opt/venv..."
+    python3.10 -m venv /opt/venv
 
-# Install your specific packages directly.
-/opt/venv/bin/pip install --no-cache-dir \
-    'datasets==2.21.0' \
-    'numpy==1.26.4' \
-    'peft==0.10.0' \
-    'torch==2.2.1' \
-    'tqdm==4.66.3' \
-    'transformers==4.45.2' \
-    'deepspeed==0.14.4' \
-    'accelerate==0.33.0'
+    # 3. Install all Python packages into the virtual environment
+    #    We activate the venv first to ensure pip and python commands are from the venv.
+    echo "--> Installing Python packages..."
+    . /opt/venv/bin/activate
 
-Bootstrap: docker
-From: nvidia/cuda:12.1.1-base-ubuntu22.04
+    pip install --no-cache-dir --upgrade pip
 
-%files from build
-# This is the key step: copy ONLY the clean virtual
-# environment from the 'build' stage into our final image.
-/opt/venv /opt/venv
+    pip install --no-cache-dir \
+        'datasets==2.21.0' \
+        'numpy==1.26.4' \
+        'peft==0.10.0' \
+        'torch==2.2.1' \
+        'tqdm==4.66.3' \
+        'transformers==4.45.2' \
+        'deepspeed==0.14.4' \
+        'accelerate==0.33.0'
 
 %environment
-# Set up the environment to use Python from our venv
-export PATH="/opt/venv/bin:$PATH"
-export VIRTUAL_ENV="/opt/venv"
-export TOKENIZERS_PARALLELISM=false
+    # This section sets up the environment every time the container starts.
+    # It ensures that the shell can find the Python from our virtual environment.
+    export PATH="/opt/venv/bin:$PATH"
+    export VIRTUAL_ENV="/opt/venv"
+    export TOKENIZERS_PARALLELISM=false
+    # Recommended: Point the Triton cache to the job's temporary directory
+    # This avoids the NFS warning you were seeing in the logs.
+    if [ -n "$SLURM_JOB_ID" ]; then
+        export TRITON_CACHE_DIR="/tmp/${USER}/${SLURM_JOB_ID}/triton_cache"
+    fi
 
 %runscript
-echo "Container is running. Python version:"
-python3 --version
-echo "To run your script, use: singularity exec <container.sif> python3 your_script.py"
+    # This runs when you execute the container directly (e.g., ./my_container.sif)
+    echo "Container is running. Python version from venv:"
+    python3 --version
+    echo "To run your script, use: apptainer exec <container.sif> python3 your_script.py"
