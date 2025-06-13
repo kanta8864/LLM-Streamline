@@ -226,12 +226,14 @@ def run():
     base_model_name = os.path.basename(args.model_name.rstrip("/"))
     output_dir = f"{base_model_name}-llm-streamline-mseloss"
 
+    # Save the lightweight network
+    lightweight_path = os.path.join(output_dir, "lightweight_network.pt")
+    torch.save(lightweight_network.state_dict(), lightweight_path)
+    print(f"✅ Lightweight network saved to: {lightweight_path}")
+
     # Save model, tokenizer, and config
     pruned_model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
     config.save_pretrained(output_dir)
 
-    # Save the lightweight network
-    lightweight_path = os.path.join(output_dir, "lightweight_network.pt")
-    torch.save(lightweight_network.state_dict(), lightweight_path)
-    print(f"✅ Lightweight network saved to: {lightweight_path}")
+
