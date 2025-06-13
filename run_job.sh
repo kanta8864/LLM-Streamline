@@ -2,7 +2,7 @@
 # File: run_job_test.sh
 
 # --- Slurm Resource Request ---
-#SBATCH --job-name=forreal-run
+#SBATCH --job-name=test-run
 #SBATCH --partition=general
 #SBATCH --time=04:00:00
 #SBATCH --nodes=1
@@ -10,7 +10,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 #SBATCH --output=slurm_test_output_%j.log
-#SBATCH --gres=gpu:l40:1
+#SBATCH --gres=gpu:a40:1
 
 set -e
 
