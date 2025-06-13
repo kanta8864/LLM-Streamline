@@ -223,27 +223,22 @@ def run():
         print(f"   - Specific error: {e}")
     print("--- END DEBUGGING ---\n")
 
-     # --- Final Saving Stage ---
-
-    # 1. Define the target network directory
-    output_dir = "/tudelft.net/staff-umbrella/llmstreamline88"
+    # --- Final Saving Stage ---
     
-    # 2. Create the directory if it doesn't exist
-    # The exist_ok=True flag prevents an error if the directory already exists.
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"\n--- Preparing to save artifacts to: {output_dir} ---")
+    # 1. Define a temporary output directory on the local node disk.
+    #    This path will be visible because we bind /tmp in the shell script.
+    local_output_dir = f"/tmp/{os.environ['SLURM_JOB_ID']}/final_output"
+    
+    # 2. Create the directory
+    os.makedirs(local_output_dir, exist_ok=True)
+    print(f"\n--- Saving temporary artifacts to local disk: {local_output_dir} ---")
 
-    # 3. Save the lightweight network's state dictionary
-    lightweight_path = os.path.join(output_dir, "lightweight_network.pt")
+    # 3. Save all artifacts to this LOCAL directory
+    lightweight_path = os.path.join(local_output_dir, "lightweight_network.pt")
     torch.save(lightweight_network.state_dict(), lightweight_path)
-    print(f"✅ Lightweight network saved successfully to: {lightweight_path}")
 
-    # 4. Save the final pruned model, tokenizer, and its configuration
-    #    The save_pretrained method saves all necessary files into the given directory.
-    pruned_model.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
-    pruned_model.config.save_pretrained(output_dir) # Save the modified config of the pruned model
+    pruned_model.save_pretrained(local_output_dir)
+    tokenizer.save_pretrained(local_output_dir)
+    pruned_model.config.save_pretrained(local_output_dir)
 
-    print(f"✅ Final pruned model, tokenizer, and config saved successfully to: {output_dir}")
-
-
+    print(f"✅ All artifacts successfully saved locally.")
