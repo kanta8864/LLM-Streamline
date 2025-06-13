@@ -223,17 +223,27 @@ def run():
         print(f"   - Specific error: {e}")
     print("--- END DEBUGGING ---\n")
 
-    base_model_name = os.path.basename(args.model_name.rstrip("/"))
-    output_dir = f"{base_model_name}-llm-streamline-mseloss"
+     # --- Final Saving Stage ---
 
-    # Save the lightweight network
+    # 1. Define the target network directory
+    output_dir = "/tudelft.net/staff-umbrella/llmstreamline88"
+    
+    # 2. Create the directory if it doesn't exist
+    # The exist_ok=True flag prevents an error if the directory already exists.
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"\n--- Preparing to save artifacts to: {output_dir} ---")
+
+    # 3. Save the lightweight network's state dictionary
     lightweight_path = os.path.join(output_dir, "lightweight_network.pt")
     torch.save(lightweight_network.state_dict(), lightweight_path)
-    print(f"✅ Lightweight network saved to: {lightweight_path}")
+    print(f"✅ Lightweight network saved successfully to: {lightweight_path}")
 
-    # Save model, tokenizer, and config
+    # 4. Save the final pruned model, tokenizer, and its configuration
+    #    The save_pretrained method saves all necessary files into the given directory.
     pruned_model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
-    config.save_pretrained(output_dir)
+    pruned_model.config.save_pretrained(output_dir) # Save the modified config of the pruned model
+
+    print(f"✅ Final pruned model, tokenizer, and config saved successfully to: {output_dir}")
 
 

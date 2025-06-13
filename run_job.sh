@@ -53,10 +53,12 @@ echo "Starting container execution..."
 apptainer exec \
     --nv \
     --bind "$(pwd)":/app \
-    --bind /tmp \
+    --bind "${JOB_TMP_DIR}":"${JOB_TMP_DIR}" \
     --pwd /app \
-    --env "APPTAINERENV_LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}" \
+    --env "HF_HOME=${HF_HOME}" \
+    --env "HF_DATASETS_CACHE=${HF_DATASETS_CACHE}" \
+    --env "TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE}" \
     "$CONTAINER_PATH" \
-    accelerate launch mseloss_entry.py --with_tracking
+    bash -c "CUDA_HOME= accelerate launch mseloss_entry.py --with_tracking"
 
 echo "Job finished."
