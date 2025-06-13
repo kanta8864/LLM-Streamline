@@ -19,7 +19,7 @@
 # FIX: Load the base module environment and a specific version of CUDA.
 # The error "module(s) are unknown: 'cuda'" means we must specify a version.
 echo "Loading modules..."
-module load 2024r1
+module use /opt/insy/modulefiles
 module load cuda/12.1
 module load apptainer
 
