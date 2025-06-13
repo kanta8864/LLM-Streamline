@@ -145,6 +145,9 @@ def parse_hf_args():
 def run():
     import os
 
+    job_id = os.getpid()
+    print(f"job_id: {job_id}")
+
     print(f"DEBUG: HF_HOME inside script = {os.environ.get('HF_HOME')}")
     print(f"DEBUG: HF_HUB_OFFLINE inside script = {os.environ.get('HF_HUB_OFFLINE')}")
     
@@ -179,7 +182,9 @@ def run():
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         trust_remote_code=True,
-        device_map=device
+        device_map=device,
+        use_auth_token=True,
+        torch_dtype=torch.bfloat16 
     )
 
     print(f"DEBUG: Model loaded. Device of first parameter: {next(model.parameters()).device}")
@@ -187,10 +192,12 @@ def run():
     config = AutoConfig.from_pretrained(
         args.model_name,
         trust_remote_code=True,
+        use_auth_token=True,
     )
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_name,
         trust_remote_code=True,
+        use_auth_token=True,
     )
     tokenizer.pad_token = tokenizer.eos_token
 
@@ -226,22 +233,30 @@ def run():
 
     print("\n--- DEBUGGING MODEL STATE BEFORE SAVING ---")
     try:
-        # Try to access a weight tensor from a layer in the pruned model
-        # The exact name might vary based on the model architecture (OPT, Llama, etc.)
-        example_tensor = pruned_model.model.decoder.layers[0].fc1.weight
-        print("✅ SUCCESS: Found an example weight tensor.")
+        if "llama" in args.model_name.lower():
+            # Correct path for Llama models
+            example_tensor = pruned_model.model.layers[0].mlp.gate_proj.weight
+            print("✅ SUCCESS: Found an example Llama weight tensor.")
+        elif "opt" in args.model_name.lower():
+            # Correct path for OPT models
+            example_tensor = pruned_model.model.decoder.layers[0].fc1.weight
+            print("✅ SUCCESS: Found an example OPT weight tensor.")
+        else:
+            raise NotImplementedError("Debug check not implemented for this model type.")
+            
         print(f"   - Tensor shape: {example_tensor.shape}")
         print(f"   - A few example values: {example_tensor.view(-1)[:5]}")
+
     except Exception as e:
-        print(f"❌ ERROR: Could not access an example weight tensor. The 'pruned_model' is likely empty.")
+        print(f"❌ ERROR: Could not access an example weight tensor. The 'pruned_model' is likely empty or has unexpected architecture.")
         print(f"   - Specific error: {e}")
+        # Optional: Print the whole model structure to help find the right path
+        # print(pruned_model) 
     print("--- END DEBUGGING ---\n")
 
     # --- Final Saving Stage ---
     
-    # 1. Define a temporary output directory on the local node disk.
-    #    This path will be visible because we bind /tmp in the shell script.
-    local_output_dir = f"/tmp/{os.environ['SLURM_JOB_ID']}/final_output"
+    local_output_dir = f"/tmp/{job_id}/final_output"
     
     # 2. Create the directory
     os.makedirs(local_output_dir, exist_ok=True)

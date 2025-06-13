@@ -278,6 +278,8 @@ def lightweight_model_train(
     # Stage 3: Initialize the lightweight model
     replace_model = init_layer(model_name, config, device)
 
+    replace_model = replace_model.to(torch.bfloat16)
+
     # Stage 4: Setup streaming datasets and dataloaders
     print("Setting up streaming dataloaders...")
     train_dataset_streaming = StreamingHiddenStatesDataset(model, dataset, tokenizer, device, layer_intervals, best_layer, batch_size)
