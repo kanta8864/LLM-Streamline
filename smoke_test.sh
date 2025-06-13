@@ -22,7 +22,7 @@ module load cuda/12.1
 
 # --- Job Execution & Path Definitions ---
 echo "Job started on $(hostname)"
-CONTAINER_PATH="$HOME/my_deepspeed_env_v2.sif" # Make sure you are using the new v2 container
+CONTAINER_PATH="/tudelft.net/staff-umbrella/llmstreamline88/containers/my_deepspeed_env_v3.sif"
 if [ ! -f "${CONTAINER_PATH}" ]; then
     echo "ERROR: Container file not found at ${CONTAINER_PATH}"
     exit 1
