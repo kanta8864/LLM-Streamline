@@ -18,7 +18,6 @@ set -e
 echo "Loading modules..."
 module use /opt/insy/modulefiles
 module load cuda/12.1
-module load singularity # Use 'singularity' as it's common, change if needed
 
 # --- Job Execution & Path Definitions ---
 echo "Job started on $(hostname)"
