@@ -55,7 +55,8 @@ apptainer exec \
     --env "HF_DATASETS_CACHE=${HF_DATASETS_CACHE}" \
     --env "TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE}" \
     --env "SLURM_JOB_ID=${SLURM_JOB_ID}" \
+    --env "DS_BUILD_OPS=0" \
     "$CONTAINER_PATH" \
-    env -u CUDA_HOME /opt/venv/bin/python3 smoke_test.py # <-- THE FIX IS HERE
+    env -u CUDA_HOME /opt/venv/bin/python3 smoke_test.py
 
 echo "Job finished."
