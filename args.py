@@ -35,9 +35,9 @@ class TrainingArguments(DefaultTrainingArguments):
     layer_intervals: Optional[int] = field(default=8)
 
     cosine_num_data: Optional[int] = field(default=50)
-    train_num_data: Optional[int] = field(default=50000)
+    train_num_data: Optional[int] = field(default=100000)
 
-    batch_size: Optional[int] = field(default=4)
+    batch_size: Optional[int] = field(default=8)
 
     gradient_accumulation_step: Optional[int] = field(default=16)
 

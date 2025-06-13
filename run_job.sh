@@ -8,7 +8,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8            # Request 8 CPU cores
-#SBATCH --mem=64G                   # Request 256 GB of memory
+#SBATCH --mem=128G                   # Request 256 GB of memory
 #SBATCH --output=slurm_test_output_%j.log
 
 # --- GPU Request ---
