@@ -18,10 +18,7 @@ set -e
 echo "Loading modules..."
 module use /opt/insy/modulefiles
 module load cuda/12.1
-# FIX-1: 'singularity' is often the name for the apptainer module on HPCs.
-# If this also fails, try 'module spider apptainer' or 'module spider singularity'
-# to find the correct name, or remove this line if it's in your default path.
-module load apptainer
+
 
 # --- Job Execution & Path Definitions ---
 echo "Job started on $(hostname)"
