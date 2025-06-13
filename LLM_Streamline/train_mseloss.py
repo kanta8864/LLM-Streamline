@@ -148,6 +148,9 @@ def run():
     print(f"DEBUG: HF_HOME inside script = {os.environ.get('HF_HOME')}")
     print(f"DEBUG: HF_HUB_OFFLINE inside script = {os.environ.get('HF_HUB_OFFLINE')}")
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
+
     import torch
     print("Torch sees GPU:", torch.cuda.is_available())
     print("Torch CUDA device count:", torch.cuda.device_count())
