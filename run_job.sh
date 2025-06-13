@@ -10,7 +10,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 #SBATCH --output=slurm_test_output_%j.log
-#SBATCH --gres=gpu:a40:1
+#SBATCH --gres=gpu:l40:1
 
 set -e
 
