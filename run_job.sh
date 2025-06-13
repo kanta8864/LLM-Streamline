@@ -2,7 +2,7 @@
 # File: run_job_test.sh
 
 # --- Slurm Resource Request ---
-#SBATCH --job-name=real-run
+#SBATCH --job-name=forreal-run
 #SBATCH --partition=general
 #SBATCH --time=04:00:00
 #SBATCH --nodes=1
