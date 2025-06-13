@@ -4,7 +4,7 @@
 # --- Slurm Resource Request ---
 #SBATCH --job-name=smoke-test
 #SBATCH --partition=general
-#SBATCH --time=00:10:00              # Request only 10 minutes for the test
+#SBATCH --time=00:10:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
@@ -19,9 +19,10 @@ echo "Loading modules..."
 module use /opt/insy/modulefiles
 module load cuda/12.1
 
+
 # --- Job Execution & Path Definitions ---
 echo "Job started on $(hostname)"
-CONTAINER_PATH="$HOME/my_deepspeed_env_v2.sif"
+CONTAINER_PATH="$HOME/my_deepspeed_env_v2.sif" # Make sure you are using the new v2 container
 if [ ! -f "${CONTAINER_PATH}" ]; then
     echo "ERROR: Container file not found at ${CONTAINER_PATH}"
     exit 1
@@ -55,6 +56,6 @@ apptainer exec \
     --env "TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE}" \
     --env "SLURM_JOB_ID=${SLURM_JOB_ID}" \
     "$CONTAINER_PATH" \
-    env -u CUDA_HOME python3 smoke_test.py # Changed to run the smoke test
+    env -u CUDA_HOME /opt/venv/bin/python3 smoke_test.py # <-- THE FIX IS HERE
 
 echo "Job finished."
