@@ -48,11 +48,15 @@ trap cleanup EXIT
 
 # --- Run Code Inside Apptainer ---
 echo "Starting container execution..."
-# FIX-2: Pass the cache environment variables into the container using the --env flag.
 apptainer exec \
     --nv \
     --bind "$(pwd)":/app \
     --bind "${JOB_TMP_DIR}":"${JOB_TMP_DIR}" \
+    # --- THIS IS THE FIX ---
+    # Create a link between the host's network drive and the container,
+    # so the container can see and write to your project folder.
+    --bind /tudelft.net/staff-umbrella:/tudelft.net/staff-umbrella \
+    # --- END OF FIX ---
     --pwd /app \
     --env "HF_HOME=${HF_HOME}" \
     --env "HF_DATASETS_CACHE=${HF_DATASETS_CACHE}" \
