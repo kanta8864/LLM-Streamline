@@ -2,9 +2,9 @@
 # File: run_job_test.sh
 
 # --- Slurm Resource Request ---
-#SBATCH --job-name=real-run
+#SBATCH --job-name=testtest-run
 #SBATCH --partition=general
-#SBATCH --time=04:00:00
+#SBATCH --time=02:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
