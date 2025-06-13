@@ -4,52 +4,54 @@
 # --- Slurm Resource Request ---
 #SBATCH --job-name=deepspeed-test-run
 #SBATCH --partition=general
-#SBATCH --time=04:00:00              # Request 3 hours for the run
+#SBATCH --time=04:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8            # Request 8 CPU cores
-#SBATCH --mem=128G                   # Request 256 GB of memory
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=128G
 #SBATCH --output=slurm_test_output_%j.log
-
-# --- GPU Request ---
-# This line actively requests one NVIDIA L40 GPU.
 #SBATCH --gres=gpu:a40:1
 
+set -e
+
 # --- Load Required Modules ---
-# FIX: Load the base module environment and a specific version of CUDA.
-# The error "module(s) are unknown: 'cuda'" means we must specify a version.
 echo "Loading modules..."
 module use /opt/insy/modulefiles
 module load cuda/12.1
-module load apptainer
+# FIX-1: 'singularity' is often the name for the apptainer module on HPCs.
+# If this also fails, try 'module spider apptainer' or 'module spider singularity'
+# to find the correct name, or remove this line if it's in your default path.
+module load singularity
 
-# --- Job Execution ---
+# --- Job Execution & Path Definitions ---
 echo "Job started on $(hostname)"
-echo "Running in directory: $(pwd)"
-echo "Allocated GPU: $CUDA_VISIBLE_DEVICES"
-echo "Host CUDA_HOME is: ${CUDA_HOME}"
-
-# --- Define Paths ---
-# Define path to your container image (assuming it's in your home directory)
 CONTAINER_PATH="$HOME/my_deepspeed_env.sif"
-
-# Check if container exists
 if [ ! -f "${CONTAINER_PATH}" ]; then
     echo "ERROR: Container file not found at ${CONTAINER_PATH}"
     exit 1
 fi
 
-# --- Set Caches to the Node's Temporary /tmp Directory ---
-# This creates a unique temp dir for your job to avoid conflicts
-JOB_TMP_DIR="/tmp/${SLURM_JOB_ID}"
-export HF_HOME="${JOB_TMP_DIR}/huggingface_cache"
-mkdir -p "${HF_HOME}"
-echo "Using temporary cache for this job: ${HF_HOME}"
+# --- Set Caches to the Node's Local, Fast /tmp Directory ---
+JOB_TMP_DIR="/tmp/${USER}/${SLURM_JOB_ID}"
+mkdir -p "${JOB_TMP_DIR}"
+
+# Set the cache directories
+export HF_HOME="${JOB_TMP_DIR}/huggingface"
+export HF_DATASETS_CACHE="${JOB_TMP_DIR}/datasets"
+export TRANSFORMERS_CACHE="${JOB_TMP_DIR}/transformers"
+mkdir -p "${HF_HOME}" "${HF_DATASETS_CACHE}" "${TRANSFORMERS_CACHE}"
+echo "Using temporary cache for this job: ${JOB_TMP_DIR}"
+
+# --- Best Practice: Cleanup Function ---
+cleanup() {
+    echo "Cleaning up temporary directory: ${JOB_TMP_DIR}"
+    rm -rf "${JOB_TMP_DIR}"
+}
+trap cleanup EXIT
 
 # --- Run Code Inside Apptainer ---
-# This command should now work because `module load cuda/12.1` will
-# correctly set the ${CUDA_HOME} variable needed for the LD_LIBRARY_PATH.
 echo "Starting container execution..."
+# FIX-2: Pass the cache environment variables into the container using the --env flag.
 apptainer exec \
     --nv \
     --bind "$(pwd)":/app \
