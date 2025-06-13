@@ -4,11 +4,11 @@
 # --- Slurm Resource Request ---
 #SBATCH --job-name=deepspeed-test-run
 #SBATCH --partition=general
-#SBATCH --time=03:00:00              # Request 3 hours for the run
+#SBATCH --time=04:00:00              # Request 3 hours for the run
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8            # Request 8 CPU cores
-#SBATCH --mem=512G                   # Request 256 GB of memory
+#SBATCH --mem=64G                   # Request 256 GB of memory
 #SBATCH --output=slurm_test_output_%j.log
 
 # --- GPU Request ---

@@ -12,7 +12,7 @@ import torch.nn as nn
 from datasets import load_dataset, load_from_disk, concatenate_datasets
 from args import TrainingArguments, ModelArguments
 from LLM_Streamline.train_lightweightnetwork import lightweight_model_train
-
+import os
 
 # In your main script (e.g., run.py)
 
@@ -161,7 +161,11 @@ def run():
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         trust_remote_code=True,
+        device_map=device
     )
+
+    print(f"DEBUG: Model loaded. Device of first parameter: {next(model.parameters()).device}")
+
     config = AutoConfig.from_pretrained(
         args.model_name,
         trust_remote_code=True,
@@ -215,10 +219,15 @@ def run():
         print(f"   - Specific error: {e}")
     print("--- END DEBUGGING ---\n")
 
-    pruned_model.save_pretrained("{}-llm-streamline-mseloss".format(args.model_name))
-
-    import os
-
-    base_model_name = os.path.basename(args.model_name)
+    base_model_name = os.path.basename(args.model_name.rstrip("/"))
     output_dir = f"{base_model_name}-llm-streamline-mseloss"
+
+    # Save model, tokenizer, and config
     pruned_model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
+    config.save_pretrained(output_dir)
+
+    # Save the lightweight network
+    lightweight_path = os.path.join(output_dir, "lightweight_network.pt")
+    torch.save(lightweight_network.state_dict(), lightweight_path)
+    print(f"✅ Lightweight network saved to: {lightweight_path}")
