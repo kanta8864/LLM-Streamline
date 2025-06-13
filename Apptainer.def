@@ -4,26 +4,25 @@ From: nvidia/cuda:12.1.1-devel-ubuntu22.04
 %post
     export DEBIAN_FRONTEND=noninteractive
 
-    # 1. Update and install system dependencies
-    echo "--> Installing Python and Build Tools..."
+    # 1. Update and install all system dependencies in a single command.
+    echo "--> Installing Python, Git, Build Tools, and CUDA Toolkit..."
     apt-get update && apt-get install -y --no-install-recommends \
         python3.10 \
         python3.10-venv \
         build-essential \
         git \
-        # --- THIS IS THE FIX ---
-        # Install the CUDA toolkit and compiler directly inside the image.
-        nvidia-cuda-toolkit
-        # --- END OF FIX ---
+        nvidia-cuda-toolkit \
     && rm -rf /var/lib/apt/lists/*
 
     # 2. Create Python virtual environment
     echo "--> Creating Python virtual environment at /opt/venv..."
     python3.10 -m venv /opt/venv
+
+    # 3. Install Python packages into the venv
+    echo "--> Installing Python packages..."
+    # Activate the venv to use its pip
     . /opt/venv/bin/activate
 
-    # 3. Install Python packages
-    echo "--> Installing Python packages..."
     pip install --no-cache-dir --upgrade pip
     pip install --no-cache-dir \
         'datasets==2.21.0' \
@@ -36,10 +35,11 @@ From: nvidia/cuda:12.1.1-devel-ubuntu22.04
         'accelerate==0.33.0'
 
 %environment
-    # The rest of the file is the same
+    # Set up the environment to use Python from our venv
     export PATH="/opt/venv/bin:$PATH"
     export VIRTUAL_ENV="/opt/venv"
     export TOKENIZERS_PARALLELISM=false
+    # Recommended: Point the Triton cache to the job's temporary directory
     if [ -n "$SLURM_JOB_ID" ]; then
         export TRITON_CACHE_DIR="/tmp/${USER}/${SLURM_JOB_ID}/triton_cache"
     fi
