@@ -147,6 +147,20 @@ def run():
 
     print(f"DEBUG: HF_HOME inside script = {os.environ.get('HF_HOME')}")
     print(f"DEBUG: HF_HUB_OFFLINE inside script = {os.environ.get('HF_HUB_OFFLINE')}")
+    
+    # =========================================================================
+    # --- START: DEFINITIVE PYTHON-LEVEL FIX ---
+    # Check if the problematic environment variable exists and delete it.
+    # This prevents deepspeed from looking in the wrong path.
+    # =========================================================================
+    invalid_cuda_home = os.environ.get('CUDA_HOME', '')
+    if 'insy' in invalid_cuda_home: # A specific check for the problematic path
+        print(f"--- Found and unsetting invalid CUDA_HOME: {invalid_cuda_home} ---")
+        del os.environ['CUDA_HOME']
+    # =========================================================================
+    # --- END: DEFINITIVE PYTHON-LEVEL FIX ---
+    # =========================================================================
+
 
 
     import torch
