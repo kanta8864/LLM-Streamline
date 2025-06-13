@@ -18,8 +18,6 @@ set -e
 echo "Loading modules..."
 module use /opt/insy/modulefiles
 module load cuda/12.1
-# Recommended: Explicitly load apptainer/singularity
-module load singularity 
 
 # --- Job Execution & Path Definitions ---
 echo "Job started on $(hostname)"
