@@ -38,7 +38,7 @@ CONFIG = {
     "min_learning_rate": 5e-6,
     "weight_decay": 1e-3,
     "gradient_accumulation_steps": 2,
-    "eval_every_n_steps": 10,
+    "eval_every_n_steps": 1,
 
     # Output Directory
     "output_dir": "./opt-1.3b-ffn-trained",
@@ -210,11 +210,12 @@ class StreamingHiddenStatesDataset(IterableDataset):
                 torch.cuda.empty_cache()
 
 
-def valid_model(model, test_dataloader, device):
+def valid_model(model, test_dataloader, device, num_validation_steps, accelerator):
     model.eval()
     loss_fn = nn.MSELoss()
     total_loss, num_batches = 0.0, 0
-    progress_bar = tqdm(test_dataloader, desc="Validating", total=len(test_dataloader), disable=not accelerator.is_local_main_process)
+    # Use the passed-in total for the progress bar
+    progress_bar = tqdm(test_dataloader, desc="Validating", total=num_validation_steps, disable=not accelerator.is_local_main_process)
     with torch.no_grad():
         for input_data, output_data in progress_bar:
             input_data, output_data = input_data.to(device), output_data.to(device)
@@ -222,8 +223,10 @@ def valid_model(model, test_dataloader, device):
             loss = loss_fn(pred, output_data)
             total_loss += loss.item()
             num_batches += 1
-    return total_loss / num_batches if num_batches > 0 else 0.0
-
+    # Handle the case where the last batch might be smaller
+    if num_batches == 0:
+        return 0.0
+    return total_loss / num_batches
 
 def main():
     script_start_time = time.time()
@@ -296,6 +299,11 @@ def main():
     )
     accelerator.print("✅ Setup complete.")
 
+    # Calculate the number of validation steps --
+    num_validation_steps = len(test_dataset_raw) // CONFIG['batch_size']
+    if len(test_dataset_raw) % CONFIG['batch_size'] != 0:
+        num_validation_steps += 1 # Account for the last, smaller batch
+
     # --- Stage 5: Training Loop ---
     accelerator.print("\n--- Stage 5: Starting Training Loop ---")
     
@@ -342,7 +350,8 @@ def main():
             if (step + 1) % CONFIG['eval_every_n_steps'] == 0:
                 accelerator.print(f"\n--- Evaluating at Step {step + 1} ---")
                 
-                valid_loss = valid_model(ffn_model, test_dataloader, accelerator.device)
+                valid_loss = valid_model(ffn_model, test_dataloader, accelerator.device, num_validation_steps, accelerator)
+
                 current_lr = scheduler.get_last_lr()[0]
 
                 # Use accelerator.print to ensure it only prints on the main process

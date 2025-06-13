@@ -4,7 +4,7 @@
 # --- Slurm Resource Request ---
 #SBATCH --job-name=deepspeed-test-run
 #SBATCH --partition=general
-#SBATCH --time=03:00:00              # Request 3 hours for the run
+#SBATCH --time=04:00:00              # Request 3 hours for the run
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8            # Request 8 CPU cores
@@ -13,7 +13,7 @@
 
 # --- GPU Request ---
 # This line actively requests one NVIDIA L40 GPU.
-#SBATCH --gres=gpu:a40:1
+#SBATCH --gres=gpu:l40:1
 
 # --- Load Required Modules ---
 # FIX: Load the base module environment and a specific version of CUDA.
@@ -57,6 +57,6 @@ apptainer exec \
     --pwd /app \
     --env "APPTAINERENV_LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}" \
     "$CONTAINER_PATH" \
-    accelerate launch final_script.py --with_tracking
+    accelerate launch mseloss_entry.py --with_tracking
 
 echo "Job finished."
