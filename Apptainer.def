@@ -2,31 +2,29 @@ Bootstrap: docker
 From: nvidia/cuda:12.1.1-devel-ubuntu22.04
 
 %post
-    # This section defines the entire build process.
-    # We use the 'devel' image because packages like deepspeed need the
-    # full CUDA toolkit (compilers) to install correctly.
-    
     export DEBIAN_FRONTEND=noninteractive
 
-    # 1. Update and install system dependencies like Python
-    echo "--> Installing Python 3.10 and venv..."
+    # 1. Update and install system dependencies
+    echo "--> Installing Python and Build Tools..."
     apt-get update && apt-get install -y --no-install-recommends \
         python3.10 \
         python3.10-venv \
+        build-essential \
         git \
+        # --- THIS IS THE FIX ---
+        # Install the CUDA toolkit and compiler directly inside the image.
+        nvidia-cuda-toolkit
+        # --- END OF FIX ---
     && rm -rf /var/lib/apt/lists/*
 
-    # 2. Create a self-contained Python virtual environment inside the container
+    # 2. Create Python virtual environment
     echo "--> Creating Python virtual environment at /opt/venv..."
     python3.10 -m venv /opt/venv
-
-    # 3. Install all Python packages into the virtual environment
-    #    We activate the venv first to ensure pip and python commands are from the venv.
-    echo "--> Installing Python packages..."
     . /opt/venv/bin/activate
 
+    # 3. Install Python packages
+    echo "--> Installing Python packages..."
     pip install --no-cache-dir --upgrade pip
-
     pip install --no-cache-dir \
         'datasets==2.21.0' \
         'numpy==1.26.4' \
@@ -38,19 +36,14 @@ From: nvidia/cuda:12.1.1-devel-ubuntu22.04
         'accelerate==0.33.0'
 
 %environment
-    # This section sets up the environment every time the container starts.
-    # It ensures that the shell can find the Python from our virtual environment.
+    # The rest of the file is the same
     export PATH="/opt/venv/bin:$PATH"
     export VIRTUAL_ENV="/opt/venv"
     export TOKENIZERS_PARALLELISM=false
-    # Recommended: Point the Triton cache to the job's temporary directory
-    # This avoids the NFS warning you were seeing in the logs.
     if [ -n "$SLURM_JOB_ID" ]; then
         export TRITON_CACHE_DIR="/tmp/${USER}/${SLURM_JOB_ID}/triton_cache"
     fi
 
 %runscript
-    # This runs when you execute the container directly (e.g., ./my_container.sif)
     echo "Container is running. Python version from venv:"
     python3 --version
-    echo "To run your script, use: apptainer exec <container.sif> python3 your_script.py"
