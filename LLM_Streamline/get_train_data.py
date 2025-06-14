@@ -14,7 +14,7 @@ def get_data(model, dataset, device, layer_intervals, best_layer, tokenizer, bat
     accelerator = Accelerator()
     device = accelerator.device
 
-    model = model.to(device)
+    # Model is already on the correct device (8-bit quantized models handle device placement automatically)
     model.eval()
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
@@ -46,7 +46,7 @@ def get_data(model, dataset, device, layer_intervals, best_layer, tokenizer, bat
     finally:
         accelerator.free_memory()
         torch.cuda.empty_cache()
-        model.cpu()
+        # Don't move quantized model to CPU as it's already handled automatically
         del model
         gc.collect()
     

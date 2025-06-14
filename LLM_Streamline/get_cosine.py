@@ -24,7 +24,7 @@ def average_similarity(layer_cosine_similarity):
 @torch.no_grad() 
 def get_cosine_similarity(model, dataset, num_data, device, layer_intervals, num_layer):
     assert len(dataset) > num_data
-    model = model.to(device)
+    # Model is already on the correct device (8-bit quantized models handle device placement automatically)
     hidden_states_list = []
     data_index = generate_unique_index(0, len(dataset), num_data)
     
@@ -65,8 +65,8 @@ def get_cosine_similarity(model, dataset, num_data, device, layer_intervals, num
     
     print(f'The highest cosine similarity comes from hidden_states {best_layer} and hidden_states {best_layer + layer_intervals}, with a value of {best_cosine:.4f}')
 
-    model.cpu()
-    del hidden_states_list, model
+    # Don't move quantized model to CPU as it's already handled automatically
+    del hidden_states_list
     torch.cuda.empty_cache()  
     
     return best_layer

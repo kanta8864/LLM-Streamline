@@ -206,12 +206,13 @@ def valid_model(model, test_dataloader, device, num_validation_steps):
 
     with torch.no_grad():
         for input_data, output_data in progress_bar:
-            input_data = input_data.to(device)
-            output_data = output_data.to(device)
-            pred = model(input_data)
+            input_data = input_data.to(device)  # Keep original dtype from quantized model
+            output_data = output_data.to(device)  # Keep original dtype from quantized model
+            pred = model(input_data.float())  # Convert input to float32 for the lightweight network
             if isinstance(pred, tuple):
                 pred = pred[0]
-            loss = loss_fn(pred, output_data)
+            # Convert target to float32 for stable loss computation
+            loss = loss_fn(pred, output_data.float())
             total_loss.append(loss.item())
 
     if not total_loss:
@@ -226,11 +227,11 @@ def init_layer(model_name, config, device):
     """
     if "llama" in model_name.lower():
         print("Initializing LlamaMLP (SwiGLU) for a Llama-style model.")
-        return LlamaMLP(config).to(device)
+        return LlamaMLP(config).to(device)  # Keep in float32 for stable training
         
     elif "opt" in model_name.lower():
         print("Initializing standard MLP (fc1/fc2) for an OPT-style model.")
-        return MLP(config.hidden_size).to(device)
+        return MLP(config.hidden_size).to(device)  # Keep in float32 for stable training
         
     else:
         raise NotImplementedError(f"No lightweight network implementation for model type: {model_name}")
@@ -272,8 +273,7 @@ def lightweight_model_train(
     )
     print(f"Best layer to start replacement: {best_layer}")
 
-    print(f"Moving base model back to target device: {device}")
-    model.to(device)
+    print(f"Base model is already on the correct device (8-bit quantized models handle device placement automatically)")
 
     # Stage 3: Initialize the lightweight model
     replace_model = init_layer(model_name, config, device)
@@ -318,17 +318,24 @@ def lightweight_model_train(
     print("Starting training with streaming data...")
     best_loss = float('inf')
     best_state_dict = None
+    
+    # Create checkpoint directory
+    checkpoint_dir = f"./checkpoints_{model_name.replace('/', '_')}"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    print(f"Checkpoints will be saved to: {checkpoint_dir}")
 
     for epoch in range(epochs):
         replace_model.train()
         progress_bar = tqdm(train_dataloader, total=num_training_steps, desc=f"Epoch {epoch}")
         
         for step, (input_data, output_data) in enumerate(progress_bar):
-            input_data = input_data.to(device)
-            output_data = output_data.to(device)
+            input_data = input_data.to(device)  # Keep original dtype from quantized model
+            output_data = output_data.to(device)  # Keep original dtype from quantized model
             
-            output = replace_model(input_data)
-            loss = criterion(output, output_data)
+            # Convert input to float32 for the lightweight network
+            output = replace_model(input_data.float())
+            # Convert target to float32 for loss computation
+            loss = criterion(output, output_data.float())
 
             # --- FIX #3 (Logic Correction): Normalize loss for gradient accumulation ---
             loss = loss / gradient_accumulation_step
@@ -350,7 +357,22 @@ def lightweight_model_train(
         if valid_loss < best_loss:
             best_loss = valid_loss
             best_state_dict = replace_model.state_dict()
-            print(f"New best validation loss: {valid_loss:.6f}. Checkpoint saved.")
+            print(f"New best validation loss: {valid_loss:.6f}. Best checkpoint saved.")
+
+        # Save checkpoint every 2 epochs
+        if (epoch + 1) % 2 == 0:
+            checkpoint_path = os.path.join(checkpoint_dir, f"lightweight_network_epoch_{epoch + 1}.pt")
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': replace_model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_loss': best_loss,
+                'validation_loss': valid_loss,
+                'best_layer': best_layer,
+                'config': config
+            }, checkpoint_path)
+            print(f"✅ Checkpoint saved at epoch {epoch + 1}: {checkpoint_path}")
 
         print(f"Epoch: {epoch}, Validation Loss: {valid_loss:.6f}")
 

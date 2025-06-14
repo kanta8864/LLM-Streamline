@@ -182,8 +182,9 @@ def run():
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         trust_remote_code=True,
-        device_map=device,
+        device_map="auto",
         use_auth_token=True,
+        load_in_8bit=True,
         
     )
 
