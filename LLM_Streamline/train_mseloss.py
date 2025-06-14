@@ -184,7 +184,7 @@ def run():
         trust_remote_code=True,
         device_map=device,
         use_auth_token=True,
-        torch_dtype=torch.bfloat16 
+        
     )
 
     print(f"DEBUG: Model loaded. Device of first parameter: {next(model.parameters()).device}")

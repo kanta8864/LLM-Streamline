@@ -35,13 +35,13 @@ class TrainingArguments(DefaultTrainingArguments):
     layer_intervals: Optional[int] = field(default=8)
 
     cosine_num_data: Optional[int] = field(default=50)
-    train_num_data: Optional[int] = field(default=5000)
+    train_num_data: Optional[int] = field(default=50000)
 
-    batch_size: Optional[int] = field(default=8)
+    batch_size: Optional[int] = field(default=4)
 
     gradient_accumulation_step: Optional[int] = field(default=16)
 
-    epoches: Optional[int] = field(default=1)
+    epoches: Optional[int] = field(default=5)
 
     lr: float = field(default=2e-4)
     wd: float = field(default=1e-3)

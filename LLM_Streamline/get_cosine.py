@@ -50,7 +50,7 @@ def get_cosine_similarity(model, dataset, num_data, device, layer_intervals, num
                 hidden_states_list[i][j+layer_intervals][0],
                 device
             )
-            similarity = torch.trace(cosine) / cosine.size(0)
+            similarity = torch.trace(cosine.to(torch.float32)) / cosine.size(0)
             cosine_similarity[j].append(similarity.item())
             del cosine
     
